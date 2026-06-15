@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String           @id @default(uuid())
+  name         String
+  email        String           @unique
+  passwordHash String
+  role         String           @default("PATIENT") // PATIENT, CAREGIVER, ADMIN
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  medications  Medication[]
+  orders       PharmacyOrder[]
+  priorAuths   PriorAuth[]
+  alerts       CaregiverAlert[]
+}
+
+model Medication {
+  id             String      @id @default(uuid())
+  userId         String
+  brandName      String
+  genericName    String?
+  dosage         String
+  frequency      String
+  pillCount      Int         @default(0)
+  totalPills     Int         @default(30)
+  status         String      @default("ACTIVE") // ACTIVE, LOW_SUPPLY, PENDING_REFILL
+  pharmacyId     String?
+  nextRefillDate DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PharmacyOrder {
+  id           String    @id @default(uuid())
+  userId       String
+  pharmacyId   String
+  status       String    @default("PLACED") // PLACED, PROCESSING, OUT_FOR_DELIVERY, COMPLETED
+  deliveryType String    @default("DELIVERY") // DELIVERY, PICKUP
+  expectedDate DateTime?
+  cost         Float     @default(0.0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PriorAuth {
+  id                   String    @id @default(uuid())
+  userId               String
+  medicationId         String
+  status               String    @default("PENDING") // PENDING, APPROVED, DENIED
+  insurer              String
+  expectedDecisionDate DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CareCircleMember {
+  id           String   @id @default(uuid())
+  patientId    String
+  caregiverId  String
+  relationship String
+  permission   String   @default("VIEW_ONLY") // VIEW_ONLY, ACTION_ENABLED, FULL_ACCESS
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model CaregiverAlert {
+  id          String   @id @default(uuid())
+  userId      String
+  caregiverId String
+  actionType  String   // REFILL, DOSE, PICKUP, NOTE
+  action      String
+  timestamp   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
