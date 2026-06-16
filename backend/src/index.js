@@ -1,8 +1,8 @@
 import express from 'express';
-import type { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { pool } from './db.js';
+import apiRoutes from './routes/api.js';
 
 dotenv.config();
 
@@ -13,10 +13,8 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-import apiRoutes from './routes/api.js';
-
 // Health Check Route
-app.get('/api/health', (req: Request, res: Response) => {
+app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Scriptly API is running' });
 });
 
