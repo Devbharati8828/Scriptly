@@ -3,6 +3,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import * as staticMock from '@/data/mockData';
 
 const DataContext = createContext(undefined);
+const API_URL = import.meta.env.VITE_API_URL;
+const apiUrl = (path) => `${API_URL}${path}`;
 
 export function DataProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(staticMock.currentUser);
@@ -17,7 +19,7 @@ export function DataProvider({ children }) {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/dashboard');
+      const res = await fetch(apiUrl('/api/dashboard'));
       if (!res.ok) throw new Error('Failed to fetch dashboard data');
       const data = await res.json();
 
@@ -265,7 +267,7 @@ export function DataProvider({ children }) {
 
   const updateMedicationPills = async (id, newCount) => {
     try {
-      const res = await fetch(`/api/medications/${id}`, {
+      const res = await fetch(apiUrl(`/api/medications/${id}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pillCount: newCount }),
@@ -280,7 +282,7 @@ export function DataProvider({ children }) {
 
   const addMedication = async (medData) => {
     try {
-      const res = await fetch('/api/medications', {
+      const res = await fetch(apiUrl('/api/medications'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(medData),
