@@ -9,6 +9,8 @@ import { useData } from '@/context/DataContext';
 import { getStatusColor, getInitials } from '@/lib/utils';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AutoRefillsIcon, NextDeliveryCalendarIcon, PriorAuthShieldIcon, CaregiverAlertsBellIcon } from '@/components/icons/CustomIcons';
+import { toast } from 'react-hot-toast';
+import { useAuth } from '@/context/AuthContext';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -21,7 +23,8 @@ const itemVariants = {
 };
 
 export default function DashboardPage() {
-  const { medications, reminders, priorAuths, pharmacyOrders, caregiverUpdates, currentUser } = useData();
+  const { medications, reminders, priorAuths, pharmacyOrders, caregiverUpdates, currentUser, refetch } = useData();
+  const { authHeaders } = useAuth();
   const navigate = useNavigate();
   const [isTakeDoseOpen, setIsTakeDoseOpen] = useState(false);
   const [isRefillOpen, setIsRefillOpen] = useState(false);
@@ -30,6 +33,42 @@ export default function DashboardPage() {
   const activeReminders = reminders.filter(r => r.status === 'due' || r.status === 'upcoming');
   const upcomingRefills = medications.filter(m => m.daysLeft <= 14).sort((a, b) => a.daysLeft - b.daysLeft);
   const activeOrder = pharmacyOrders.find(o => o.status !== 'delivered' && o.status !== 'picked-up');
+  
+  const API_URL = import.meta.env.VITE_API_URL;
+
+  const handleTakeDose = async () => {
+    if (!selectedMed) return;
+    try {
+      const res = await fetch(`${API_URL}/api/medications/${selectedMed.id || selectedMed.medicationId}/dose-log`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to log dose');
+      toast.success('Dose logged successfully! Caregivers have been notified.');
+      setIsTakeDoseOpen(false);
+      refetch();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  const handleRefillRequest = async () => {
+    if (!selectedMed) return;
+    try {
+      const res = await fetch(`${API_URL}/api/medications/${selectedMed.id}/refill`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to request refill');
+      toast.success('Refill requested successfully!');
+      setIsRefillOpen(false);
+      refetch();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
   
   return (
     <div className="p-8 pb-16 max-w-7xl mx-auto w-full">
@@ -98,8 +137,8 @@ export default function DashboardPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="center">
-                        <DropdownMenuItem onClick={() => alert('Snoozed for 15 Minutes')}>15 Minutes</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => alert('Snoozed for 1 Hour')}>1 Hour</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => toast.success('Snoozed for 15 Minutes')}>15 Minutes</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => toast.success('Snoozed for 1 Hour')}>1 Hour</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -248,7 +287,7 @@ export default function DashboardPage() {
           <div className="py-4 text-sm text-slate-600"><p>This will log the intake and notify your caregiver circle that you are on track with your schedule today.</p></div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setIsTakeDoseOpen(false)} className="w-full">Cancel</Button>
-            <Button onClick={() => { alert('Dose logged successfully! Caregivers have been notified.'); setIsTakeDoseOpen(false); }} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold">Confirm</Button>
+            <Button onClick={handleTakeDose} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold">Confirm</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -263,7 +302,7 @@ export default function DashboardPage() {
           <div className="py-4 text-sm text-slate-600"><p>We will submit the refill request to your pharmacy. Once approved, you will see a new tracking card under Pharmacy Orders.</p></div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setIsRefillOpen(false)} className="w-full">Cancel</Button>
-            <Button onClick={() => { alert('Refill requested successfully!'); setIsRefillOpen(false); }} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold">Confirm Refill</Button>
+            <Button onClick={handleRefillRequest} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold">Confirm Refill</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -9,6 +9,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/components/ui/label';
 import { useData } from '@/context/DataContext';
 import { getStatusColor } from '@/lib/utils';
+import { toast } from 'react-hot-toast';
+import { useAuth } from '@/context/AuthContext';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -21,7 +23,8 @@ const itemVariants = {
 };
 
 export default function MedicationsPage() {
-  const { medications, addMedication } = useData();
+  const { medications, addMedication, refetch } = useData();
+  const { authHeaders } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [selectedMed, setSelectedMed] = useState(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
@@ -37,6 +40,25 @@ export default function MedicationsPage() {
     totalPills: '30',
     pharmacyId: 'CVS Pharmacy — Main St',
   });
+
+  const API_URL = import.meta.env.VITE_API_URL;
+
+  const handleRefillRequest = async () => {
+    if (!selectedMed) return;
+    try {
+      const res = await fetch(`${API_URL}/api/medications/${selectedMed.id}/refill`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to request refill');
+      toast.success('Refill request submitted successfully!');
+      setIsRefillOpen(false);
+      refetch();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -228,7 +250,7 @@ export default function MedicationsPage() {
           <div className="py-4 text-sm text-slate-600"><p>Your current refill will be ordered and routed to your pharmacy. Standard co-payments will apply upon pickup or delivery.</p></div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setIsRefillOpen(false)} className="w-full">Cancel</Button>
-            <Button onClick={() => { alert('Refill request submitted successfully!'); setIsRefillOpen(false); }} className="w-full bg-blue-600 hover:bg-blue-700 text-white">Request Refill</Button>
+            <Button onClick={handleRefillRequest} className="w-full bg-blue-600 hover:bg-blue-700 text-white">Request Refill</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -252,7 +274,7 @@ export default function MedicationsPage() {
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setIsEditScheduleOpen(false)} className="w-full">Cancel</Button>
-            <Button onClick={() => { alert('Schedule updated successfully!'); setIsEditScheduleOpen(false); }} className="w-full bg-blue-600 hover:bg-blue-700 text-white">Save Changes</Button>
+            <Button onClick={() => { toast.success('Schedule updated successfully!'); setIsEditScheduleOpen(false); }} className="w-full bg-blue-600 hover:bg-blue-700 text-white">Save Changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -267,7 +289,7 @@ export default function MedicationsPage() {
           <div className="py-4 text-sm text-slate-600"><p className="text-red-500 font-medium">Warning: This will stop all automated refill scheduling and caregiver updates for this medication.</p></div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setIsDiscontinueOpen(false)} className="w-full">Cancel</Button>
-            <Button onClick={() => { alert('Medication discontinued successfully.'); setIsDiscontinueOpen(false); }} className="w-full bg-red-600 hover:bg-red-700 text-white">Discontinue</Button>
+            <Button onClick={() => { toast.success('Medication discontinued successfully.'); setIsDiscontinueOpen(false); }} className="w-full bg-red-600 hover:bg-red-700 text-white">Discontinue</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

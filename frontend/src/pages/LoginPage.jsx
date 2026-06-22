@@ -1,20 +1,23 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, ArrowRight } from 'lucide-react';
+import { Mail, Lock, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { CapsuleLogoIcon, AutoRefillsIcon } from '@/components/icons/CustomIcons';
+import { useAuth } from '@/context/AuthContext';
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('john@example.com');
-  const [password, setPassword] = useState('password');
+  const { login, authLoading, authError } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    navigate('/dashboard');
+    const ok = await login(email, password);
+    if (ok) navigate('/dashboard');
   };
 
   return (
@@ -66,9 +69,7 @@ export default function LoginPage() {
           <div className="text-center mb-8">
             <h2 className="text-2xl font-bold text-slate-800 mb-2">Welcome back</h2>
             <p className="text-slate-500">Sign in to manage your medications</p>
-            <div className="mt-3 px-4 py-2 bg-blue-50/70 border border-blue-100/50 rounded-xl text-xs text-blue-700 font-medium">
-              Demo Account: <span className="font-bold text-blue-800">john@example.com</span> / <span className="font-bold text-blue-800">password</span>
-            </div>
+
           </div>
 
           <form onSubmit={handleLogin} className="space-y-5">
@@ -77,7 +78,7 @@ export default function LoginPage() {
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                 <Input 
-                  id="email" type="email" placeholder="john@example.com" 
+                  id="email" type="email" placeholder="Enter your email" 
                   className="pl-10 h-12 bg-slate-50/50 border-slate-200 focus:bg-white"
                   value={email} onChange={(e) => setEmail(e.target.value)} required
                 />
@@ -87,7 +88,7 @@ export default function LoginPage() {
             <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <Label htmlFor="password" className="text-slate-700">Password</Label>
-                <Link to="#" className="text-sm font-semibold text-blue-600 hover:text-blue-700">Forgot password?</Link>
+                <span className="text-sm font-semibold text-slate-400 cursor-not-allowed" title="Coming soon">Forgot password?</span>
               </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -99,9 +100,19 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <Button type="submit" className="w-full h-12 text-base font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200 rounded-xl group mt-4">
-              Sign In
-              <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            {authError && (
+              <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                {authError}
+              </div>
+            )}
+
+            <Button type="submit" disabled={authLoading} className="w-full h-12 text-base font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200 rounded-xl group mt-4 disabled:opacity-70">
+              {authLoading ? (
+                <><Loader2 className="mr-2 w-4 h-4 animate-spin" /> Signing in...</>
+              ) : (
+                <>Sign In <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" /></>
+              )}
             </Button>
           </form>
 
@@ -111,8 +122,8 @@ export default function LoginPage() {
           </div>
 
           <div className="mt-8 grid grid-cols-2 gap-4">
-            <Button variant="outline" className="h-12 bg-white border-slate-200 text-slate-600 font-semibold hover:bg-slate-50 rounded-xl">
-              <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
+            <Button disabled variant="outline" title="Coming soon" className="h-12 bg-white border-slate-200 text-slate-400 font-semibold cursor-not-allowed opacity-50 rounded-xl">
+              <svg className="w-5 h-5 mr-2 opacity-50" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                 <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
@@ -120,8 +131,8 @@ export default function LoginPage() {
               </svg>
               Google
             </Button>
-            <Button variant="outline" className="h-12 bg-white border-slate-200 text-slate-600 font-semibold hover:bg-slate-50 rounded-xl">
-              <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+            <Button disabled variant="outline" title="Coming soon" className="h-12 bg-white border-slate-200 text-slate-400 font-semibold cursor-not-allowed opacity-50 rounded-xl">
+              <svg className="w-5 h-5 mr-2 opacity-50" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.04 2.33-.78 3.73-.78 1.6 0 2.8.69 3.54 1.76-2.92 1.76-2.42 5.68.42 6.84-.71 1.83-1.64 3.44-2.77 4.35zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
               </svg>
               Apple

@@ -23,12 +23,14 @@ import { Input } from '@/components/ui/input';
 import { cn, getInitials } from '@/lib/utils';
 import { useData } from '@/context/DataContext';
 import { useSidebar } from '@/context/SidebarContext';
+import { useAuth } from '@/context/AuthContext';
 
 export default function Header() {
   const navigate = useNavigate();
   const [showSearch, setShowSearch] = useState(false);
   const { currentUser, notifications } = useData();
   const { toggleSidebar } = useSidebar();
+  const { logout } = useAuth();
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
@@ -152,9 +154,9 @@ export default function Header() {
                   className="h-9 gap-2 px-2 hover:bg-blue-50"
                 >
                   <div className="h-8 w-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-xs font-bold text-white shadow-md shadow-blue-200">
-                    {getInitials(currentUser.name)}
+                    {getInitials(currentUser?.name || 'Unknown User')}
                   </div>
-                  <span className="text-sm font-medium text-slate-700">{currentUser.name}</span>
+                  <span className="text-sm font-medium text-slate-700">{currentUser?.name || 'Unknown User'}</span>
                   <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
                 </Button>
               </DropdownMenuTrigger>
@@ -168,7 +170,13 @@ export default function Header() {
                   Settings
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate('/login')} className="cursor-pointer text-red-600">
+                <DropdownMenuItem 
+                  onClick={() => {
+                    logout();
+                    navigate('/login');
+                  }} 
+                  className="cursor-pointer text-red-600"
+                >
                   <LogOut className="mr-2 h-4 w-4" />
                   Sign Out
                 </DropdownMenuItem>

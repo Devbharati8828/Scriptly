@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useData } from '@/context/DataContext';
 import { getInitials } from '@/lib/utils';
+import { toast } from 'react-hot-toast';
 
 export default function CareCirclePage() {
   const { careCircleMembers } = useData();
@@ -26,7 +27,7 @@ export default function CareCirclePage() {
 
   const handleInviteSubmit = (e) => {
     e.preventDefault();
-    alert(`Invitation sent to ${inviteForm.name} (${inviteForm.email})!`);
+    toast.success(`Invitation sent to ${inviteForm.name} (${inviteForm.email})!`);
     setIsInviteOpen(false);
     setInviteForm({
       name: '',
@@ -208,8 +209,7 @@ export default function CareCirclePage() {
                   <Button 
                     onClick={() => {
                       navigator.clipboard.writeText(`https://scripty.health/relay/share-${relayMed.toLowerCase().replace(/ /g, '-')}`);
-                      alert('Copied relay link to clipboard!');
-                    }}
+                      toast.success('Copied relay link to clipboard!');                    }}
                     className="bg-purple-600 hover:bg-purple-700 text-white shrink-0"
                   >
                     Copy
@@ -306,7 +306,7 @@ export default function CareCirclePage() {
               Send a secure health update or question.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={(e) => { e.preventDefault(); alert('Message sent securely!'); setIsMessageOpen(false); }} className="space-y-4 py-4">
+          <form onSubmit={(e) => { e.preventDefault(); toast.success('Message sent securely!'); setIsMessageOpen(false); }} className="space-y-4 py-4">
             <div className="space-y-1">
               <Label className="text-slate-700">Message Body</Label>
               <textarea

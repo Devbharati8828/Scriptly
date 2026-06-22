@@ -1,22 +1,16 @@
 import mysql from 'mysql2/promise';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 async function createDatabase() {
   try {
-    const connection = await mysql.createConnection({
-      host: 'localhost',
-      port: 3306,
-      user: 'root',
-      password: '8828064828',
-    });
-    console.log('Connected to MySQL server.');
+    const databaseUrl = process.env.DATABASE_URL;
+    if (!databaseUrl) throw new Error('DATABASE_URL is not defined in .env');
 
-    // Create database
-    await connection.query('CREATE DATABASE IF NOT EXISTS scriptly;');
-    console.log('Database "scriptly" created/verified successfully.');
-
-    // Switch to database
-    await connection.query('USE scriptly;');
-    console.log('Switched to "scriptly" database.');
+    // Connect directly via the full URL (already includes the target DB name)
+    const connection = await mysql.createConnection(databaseUrl);
+    console.log('Connected to cloud MySQL server.');
 
     // Create User Table
     await connection.query(`
@@ -81,7 +75,8 @@ async function createDatabase() {
         expectedDecisionDate DATETIME(3),
         createdAt DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
         updatedAt DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-        FOREIGN KEY (userId) REFERENCES User(id) ON DELETE CASCADE
+        FOREIGN KEY (userId) REFERENCES User(id) ON DELETE CASCADE,
+        FOREIGN KEY (medicationId) REFERENCES Medication(id) ON DELETE CASCADE
       );
     `);
     console.log('Table "PriorAuth" verified.');
@@ -95,10 +90,40 @@ async function createDatabase() {
         relationship VARCHAR(255) NOT NULL,
         permission VARCHAR(50) DEFAULT 'VIEW_ONLY',
         createdAt DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
-        updatedAt DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
+        updatedAt DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        FOREIGN KEY (patientId) REFERENCES User(id) ON DELETE CASCADE,
+        FOREIGN KEY (caregiverId) REFERENCES User(id) ON DELETE CASCADE
       );
     `);
     console.log('Table "CareCircleMember" verified.');
+
+    // ── ALTER TABLE: add missing FKs to already-existing tables on live DB ────
+    // These are safe to run repeatedly — they fail silently if the FK already exists.
+    const alterStatements = [
+      // PriorAuth.medicationId FK (was missing from initial schema)
+      `ALTER TABLE PriorAuth
+         ADD CONSTRAINT fk_priorauth_medication
+         FOREIGN KEY (medicationId) REFERENCES Medication(id) ON DELETE CASCADE`,
+      // CareCircleMember.patientId FK
+      `ALTER TABLE CareCircleMember
+         ADD CONSTRAINT fk_carecircle_patient
+         FOREIGN KEY (patientId) REFERENCES User(id) ON DELETE CASCADE`,
+      // CareCircleMember.caregiverId FK
+      `ALTER TABLE CareCircleMember
+         ADD CONSTRAINT fk_carecircle_caregiver
+         FOREIGN KEY (caregiverId) REFERENCES User(id) ON DELETE CASCADE`,
+    ];
+
+    for (const stmt of alterStatements) {
+      try {
+        await connection.query(stmt);
+        console.log('Applied FK constraint.');
+      } catch (e) {
+        // ER_DUP_KEYNAME (1061) or ER_FK_DUP_NAME (1826): constraint already exists — safe to ignore
+        if (e.errno !== 1061 && e.errno !== 1826) throw e;
+      }
+    }
+    console.log('Foreign key constraints verified.');
 
     // Create CaregiverAlert Table
     await connection.query(`
@@ -114,8 +139,35 @@ async function createDatabase() {
     `);
     console.log('Table "CaregiverAlert" verified.');
 
-    await connection.end();
+    // Create RefillRequest Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS RefillRequest (
+        id VARCHAR(36) PRIMARY KEY,
+        userId VARCHAR(36) NOT NULL,
+        medicationId VARCHAR(36) NOT NULL,
+        status VARCHAR(50) DEFAULT 'PENDING',
+        requestedAt DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
+        FOREIGN KEY (userId) REFERENCES User(id) ON DELETE CASCADE,
+        FOREIGN KEY (medicationId) REFERENCES Medication(id) ON DELETE CASCADE
+      );
+    `);
+    console.log('Table "RefillRequest" verified.');
+
+    // Create DoseLog Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS DoseLog (
+        id VARCHAR(36) PRIMARY KEY,
+        userId VARCHAR(36) NOT NULL,
+        medicationId VARCHAR(36) NOT NULL,
+        takenAt DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
+        FOREIGN KEY (userId) REFERENCES User(id) ON DELETE CASCADE,
+        FOREIGN KEY (medicationId) REFERENCES Medication(id) ON DELETE CASCADE
+      );
+    `);
+    console.log('Table "DoseLog" verified.');
+
     console.log('Database initialization completed successfully.');
+    await connection.end();
   } catch (error) {
     console.error('Failed to initialize database:', error);
     process.exit(1);

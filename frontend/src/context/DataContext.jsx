@@ -1,25 +1,141 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import * as staticMock from '@/data/mockData';
+import { useAuth } from '@/context/AuthContext';
 
 const DataContext = createContext(undefined);
 const API_URL = import.meta.env.VITE_API_URL;
 const apiUrl = (path) => `${API_URL}${path}`;
 
+// Static fallback data for reports, settings, etc.
+const adherenceData = [
+  { month: 'Jan', adherenceRate: 92, refillsOnTime: 5, refillsLate: 1, missedDoses: 3 },
+  { month: 'Feb', adherenceRate: 88, refillsOnTime: 4, refillsLate: 2, missedDoses: 5 },
+  { month: 'Mar', adherenceRate: 95, refillsOnTime: 6, refillsLate: 0, missedDoses: 2 },
+  { month: 'Apr', adherenceRate: 91, refillsOnTime: 5, refillsLate: 1, missedDoses: 4 },
+  { month: 'May', adherenceRate: 97, refillsOnTime: 6, refillsLate: 0, missedDoses: 1 },
+];
+
+const costData = [
+  { month: 'Jan', outOfPocket: 124, insurancePaid: 890, savings: 45 },
+  { month: 'Feb', outOfPocket: 118, insurancePaid: 920, savings: 62 },
+  { month: 'Mar', outOfPocket: 135, insurancePaid: 880, savings: 38 },
+  { month: 'Apr', outOfPocket: 110, insurancePaid: 950, savings: 78 },
+  { month: 'May', outOfPocket: 95, insurancePaid: 960, savings: 92 },
+];
+
+const pharmacies = [
+  {
+    id: 'ph1',
+    name: 'CVS Pharmacy — Main St',
+    address: '1234 Main Street, Suite 100',
+    phone: '(555) 234-5678',
+    distance: '0.8 mi',
+    rating: 4.5,
+    deliveryAvailable: true,
+    hours: '8:00 AM – 10:00 PM',
+    acceptedInsurance: ['Blue Cross Blue Shield', 'Aetna', 'United Healthcare'],
+  },
+  {
+    id: 'ph2',
+    name: 'Walgreens — Oak Ave',
+    address: '567 Oak Avenue',
+    phone: '(555) 345-6789',
+    distance: '1.2 mi',
+    rating: 4.2,
+    deliveryAvailable: true,
+    hours: '7:00 AM – 11:00 PM',
+    acceptedInsurance: ['Blue Cross Blue Shield', 'Cigna', 'United Healthcare'],
+  },
+  {
+    id: 'ph3',
+    name: 'Rite Aid — Elm Blvd',
+    address: '890 Elm Boulevard',
+    phone: '(555) 456-7890',
+    distance: '2.1 mi',
+    rating: 3.9,
+    deliveryAvailable: false,
+    hours: '9:00 AM – 9:00 PM',
+    acceptedInsurance: ['Blue Cross Blue Shield', 'Aetna'],
+  },
+];
+
+const staticCareCircleMembers = [
+  {
+    id: 'cc1',
+    name: 'Dr. Patel',
+    role: 'doctor',
+    relationship: 'Primary Care Physician',
+    avatar: '/avatars/dr-patel.jpg',
+    permission: 'full-access',
+    email: 'dr.patel@clinic.com',
+    phone: '(555) 123-4567',
+    lastActive: '2026-05-18T14:30:00Z',
+  },
+  {
+    id: 'cc2',
+    name: 'Anna',
+    role: 'caregiver',
+    relationship: 'Anna (Caregiver)',
+    avatar: '/avatars/anna.jpg',
+    permission: 'action-enabled',
+    email: 'anna@example.com',
+    phone: '(555) 987-6543',
+    lastActive: '2026-05-20T02:50:00Z',
+  },
+];
+
+const formatAlertTimestamp = (timestamp) => {
+  if (!timestamp) return 'Just now';
+  const now = new Date();
+  const date = new Date(timestamp);
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins} min ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours} hr${diffHours > 1 ? 's' : ''} ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
+
 export function DataProvider({ children }) {
-  const [currentUser, setCurrentUser] = useState(staticMock.currentUser);
-  const [medications, setMedications] = useState(staticMock.medications);
-  const [priorAuths, setPriorAuths] = useState(staticMock.priorAuths);
-  const [pharmacyOrders, setPharmacyOrders] = useState(staticMock.pharmacyOrders);
-  const [reminders, setReminders] = useState(staticMock.reminders);
-  const [careCircleMembers] = useState(staticMock.careCircleMembers);
-  const [caregiverUpdates, setCaregiverUpdates] = useState(staticMock.caregiverUpdates);
+  const { authHeaders, clearSession, isAuthenticated } = useAuth();
+
+  const [currentUser, setCurrentUser] = useState(null);
+  const [medications, setMedications] = useState([]);
+  const [priorAuths, setPriorAuths] = useState([]);
+  const [pharmacyOrders, setPharmacyOrders] = useState([]);
+  const [reminders, setReminders] = useState([]);
+  const [careCircleMembers] = useState(staticCareCircleMembers);
+  const [caregiverUpdates, setCaregiverUpdates] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  /** Fetch with the Authorization header pre-attached. Clears session on 401. */
+  const authFetch = async (url, options = {}) => {
+    const res = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(),
+        ...(options.headers || {}),
+      },
+    });
+    if (res.status === 401) {
+      clearSession();
+      throw new Error('Session expired. Please log in again.');
+    }
+    return res;
+  };
 
   const fetchData = async () => {
+    if (!isAuthenticated) {
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
-      const res = await fetch(apiUrl('/api/dashboard'));
+      setError(null);
+      const res = await authFetch(apiUrl('/api/dashboard'));
       if (!res.ok) throw new Error('Failed to fetch dashboard data');
       const data = await res.json();
 
@@ -51,7 +167,7 @@ export function DataProvider({ children }) {
           if (dbMed.brandName === 'Lisinopril') {
             icon = '❤️';
             color = 'text-red-500';
-          } else if (dbMed.brandName === 'Atorvastatin' || dbMed.brandName === 'Atorsattatin') {
+          } else if (dbMed.brandName === 'Atorvastatin' || dbMed.brandName === 'Atorsattatin' || dbMed.brandName === 'Lipitor') {
             icon = '💊';
             color = 'text-rose-500';
           } else if (dbMed.brandName === 'Metformin') {
@@ -73,7 +189,7 @@ export function DataProvider({ children }) {
             daysLeft: dbMed.pillCount,
             totalDays: dbMed.totalPills,
             nextRefillDate: dbMed.nextRefillDate ? dbMed.nextRefillDate.split('T')[0] : '',
-            pharmacy: 'CVS Pharmacy — Main St',
+            pharmacy: dbMed.pharmacyId || 'CVS Pharmacy — Main St',
             prescriber: 'Dr. Patel',
             status,
             icon,
@@ -96,8 +212,8 @@ export function DataProvider({ children }) {
             medicationName: med.brandName,
             time,
             dose: med.dose,
-            pillCount: med.brandName.includes('Ator') ? 2 : 1,
-            status: med.brandName.includes('Ator') ? 'due' : 'taken',
+            pillCount: med.brandName.toLowerCase().includes('ator') || med.brandName.toLowerCase().includes('lipitor') ? 2 : 1,
+            status: med.brandName.toLowerCase().includes('ator') || med.brandName.toLowerCase().includes('lipitor') ? 'due' : 'taken',
             icon: med.icon,
           };
         });
@@ -142,13 +258,13 @@ export function DataProvider({ children }) {
                   label: 'Processing',
                   date: 'May 19',
                   completed: status === 'ready' || status === 'picked-up',
-                  current: status === 'processing'
+                  current: status === 'processing',
                 },
                 {
                   label: 'Ready for Pickup',
                   date: '',
                   completed: status === 'picked-up',
-                  current: status === 'ready'
+                  current: status === 'ready',
                 },
               ]
             : [
@@ -158,12 +274,12 @@ export function DataProvider({ children }) {
                   label: 'Out for Delivery',
                   date: 'May 20',
                   completed: status === 'out-for-delivery' || status === 'delivered',
-                  current: status === 'out-for-delivery'
+                  current: status === 'out-for-delivery',
                 },
                 {
                   label: 'Expected',
                   date: expectedDate,
-                  completed: status === 'delivered'
+                  completed: status === 'delivered',
                 },
               ];
 
@@ -235,31 +351,31 @@ export function DataProvider({ children }) {
               { label: 'Insurer Review', date: '', completed: status !== 'pending', current: status === 'pending' },
               { label: 'Decision', date: '', completed: status === 'approved' },
             ],
-            notes: dbAuth.status === 'APPROVED'
-              ? 'Approved for 12 months. Next renewal: April 2027.'
-              : 'Prior authorization request processed via automation mesh.',
+            notes:
+              dbAuth.status === 'APPROVED'
+                ? 'Approved for 12 months. Next renewal: April 2027.'
+                : 'Prior authorization request processed via automation mesh.',
           };
         });
         setPriorAuths(mappedAuths);
       }
 
       if (data.alerts) {
-        const mappedAlerts = data.alerts.map((dbAlert) => {
-          return {
-            id: dbAlert.id,
-            caregiverId: dbAlert.caregiverId,
-            caregiverName: 'Anna',
-            caregiverAvatar: '/avatars/anna.jpg',
-            action: dbAlert.action,
-            actionType: dbAlert.actionType.toLowerCase(),
-            timestamp: '10 mins ago',
-            medication: 'Lipitor 20mg',
-          };
-        });
+        const mappedAlerts = data.alerts.map((dbAlert) => ({
+          id: dbAlert.id,
+          caregiverId: dbAlert.caregiverId,
+          caregiverName: dbAlert.caregiverName || 'Caregiver',
+          caregiverAvatar: dbAlert.caregiverName === 'Dr. Patel' ? '/avatars/dr-patel.jpg' : '/avatars/anna.jpg',
+          action: dbAlert.action,
+          actionType: dbAlert.actionType.toLowerCase(),
+          timestamp: formatAlertTimestamp(dbAlert.timestamp),
+          medication: dbAlert.action.toLowerCase().includes('dose') ? 'Atorvastatin 20mg' : dbAlert.action.toLowerCase().includes('refill') ? 'Metformin 1000mg' : 'Lisinopril 10mg',
+        }));
         setCaregiverUpdates(mappedAlerts);
       }
-    } catch (error) {
-      console.error('Error fetching dynamic data, falling back to static:', error);
+    } catch (err) {
+      console.error('Error fetching dashboard data:', err);
+      setError(err);
     } finally {
       setLoading(false);
     }
@@ -267,9 +383,8 @@ export function DataProvider({ children }) {
 
   const updateMedicationPills = async (id, newCount) => {
     try {
-      const res = await fetch(apiUrl(`/api/medications/${id}`), {
+      const res = await authFetch(apiUrl(`/api/medications/${id}`), {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pillCount: newCount }),
       });
       if (res.ok) {
@@ -282,9 +397,8 @@ export function DataProvider({ children }) {
 
   const addMedication = async (medData) => {
     try {
-      const res = await fetch(apiUrl('/api/medications'), {
+      const res = await authFetch(apiUrl('/api/medications'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(medData),
       });
       if (res.ok) {
@@ -299,7 +413,9 @@ export function DataProvider({ children }) {
 
   useEffect(() => {
     fetchData();
-  }, []);
+    // Re-fetch whenever auth state changes (e.g. after login)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
 
   return (
     <DataContext.Provider
@@ -311,9 +427,9 @@ export function DataProvider({ children }) {
         reminders,
         careCircleMembers,
         caregiverUpdates,
-        adherenceData: staticMock.adherenceData,
-        costData: staticMock.costData,
-        pharmacies: staticMock.pharmacies,
+        adherenceData,
+        costData,
+        pharmacies,
         notifications: [
           {
             id: 'n1',
@@ -323,9 +439,10 @@ export function DataProvider({ children }) {
             timestamp: '30 min ago',
             read: false,
             actionUrl: '/medications',
-          }
+          },
         ],
         loading,
+        error,
         refetch: fetchData,
         updateMedicationPills,
         addMedication,

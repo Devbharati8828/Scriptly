@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { Download, TrendingUp, DollarSign, Activity, Pill, CheckCircle2 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
+
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useData } from '@/context/DataContext';
 
@@ -193,7 +195,7 @@ export default function ReportsPage() {
             <Button variant="outline" onClick={() => setIsExportOpen(false)} className="w-full">Cancel</Button>
             <Button 
               onClick={() => {
-                alert('Claims pack generated and downloaded successfully!');
+                toast.success('Claims pack generated and downloaded successfully!');
                 setIsExportOpen(false);
               }} 
               className="w-full bg-blue-600 hover:bg-blue-700 text-white"

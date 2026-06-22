@@ -1,8 +1,10 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import PageShell from '@/components/layout/PageShell';
+import { Toaster } from 'react-hot-toast';
+import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { DataProvider } from '@/context/DataContext';
 import { SidebarProvider } from '@/context/SidebarContext';
+import PageShell from '@/components/layout/PageShell';
 
 // Pages
 import LandingPage from '@/pages/LandingPage';
@@ -17,32 +19,63 @@ import ReportsPage from '@/pages/ReportsPage';
 import CareCirclePage from '@/pages/CareCirclePage';
 import SettingsPage from '@/pages/SettingsPage';
 
+/** Redirects unauthenticated users to /login */
+function ProtectedRoute({ children }) {
+  const { isAuthenticated } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  return children;
+}
+
+/** Redirects already-authenticated users away from login/signup */
+function GuestRoute({ children }) {
+  const { isAuthenticated } = useAuth();
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
+  return children;
+}
+
+function AppRoutes() {
+  return (
+    <Routes>
+      {/* Public */}
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/login"  element={<GuestRoute><LoginPage /></GuestRoute>} />
+      <Route path="/signup" element={<GuestRoute><SignupPage /></GuestRoute>} />
+
+      {/* Protected — wrapped in PageShell layout */}
+      <Route
+        element={
+          <ProtectedRoute>
+            <SidebarProvider>
+              <PageShell />
+            </SidebarProvider>
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/dashboard"            element={<DashboardPage />} />
+        <Route path="/medications"          element={<MedicationsPage />} />
+        <Route path="/pharmacy-orders"      element={<PharmacyOrdersPage />} />
+        <Route path="/prior-authorizations" element={<PriorAuthPage />} />
+        <Route path="/caregiver-alerts"     element={<CaregiverAlertsPage />} />
+        <Route path="/reports"              element={<ReportsPage />} />
+        <Route path="/care-circle"          element={<CareCirclePage />} />
+        <Route path="/settings"             element={<SettingsPage />} />
+      </Route>
+
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
+
 export default function App() {
   return (
-    <DataProvider>
-      <BrowserRouter>
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignupPage />} />
-
-          {/* Protected Routes (wrapped in PageShell layout) */}
-          <Route element={<SidebarProvider><PageShell /></SidebarProvider>}>
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/medications" element={<MedicationsPage />} />
-            <Route path="/pharmacy-orders" element={<PharmacyOrdersPage />} />
-            <Route path="/prior-authorizations" element={<PriorAuthPage />} />
-            <Route path="/caregiver-alerts" element={<CaregiverAlertsPage />} />
-            <Route path="/reports" element={<ReportsPage />} />
-            <Route path="/care-circle" element={<CareCirclePage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-          </Route>
-
-          {/* Fallback */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </DataProvider>
+    <AuthProvider>
+      <DataProvider>
+        <BrowserRouter>
+          <AppRoutes />
+          <Toaster position="bottom-right" />
+        </BrowserRouter>
+      </DataProvider>
+    </AuthProvider>
   );
 }

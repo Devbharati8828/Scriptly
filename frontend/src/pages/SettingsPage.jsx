@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { User as UserIcon, Shield, Bell, Settings as GearIcon, Save } from 'lucide-react';
+import { User as UserIcon, Shield, Bell, Settings as GearIcon, Save, Lock } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,7 +13,7 @@ export default function SettingsPage() {
   // Profile State
   const [profile, setProfile] = useState({
     name: currentUser?.name || 'John Doe',
-    email: currentUser?.email || 'john@example.com',
+    email: currentUser?.email || 'john@gmail.com',
     primaryDoctor: currentUser?.primaryDoctor || 'Dr. Patel',
     primaryPharmacy: currentUser?.primaryPharmacy || 'CVS Pharmacy — Main St',
   });
@@ -39,6 +40,14 @@ export default function SettingsPage() {
     highContrast: false,
   });
 
+  // Security State
+  const [security, setSecurity] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [securityStatus, setSecurityStatus] = useState({ type: '', message: '' });
+
   const handleProfileChange = (e) => {
     const { name, value } = e.target;
     setProfile(prev => ({ ...prev, [name]: value }));
@@ -49,8 +58,48 @@ export default function SettingsPage() {
     setInsurance(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleSecurityChange = (e) => {
+    const { name, value } = e.target;
+    setSecurity(prev => ({ ...prev, [name]: value }));
+  };
+
   const handleSave = (section) => {
-    alert(`${section} settings saved successfully! (Mock)`);
+    toast.success(`${section} settings saved successfully!`);
+  };
+
+  const handleSaveSecurity = async () => {
+    setSecurityStatus({ type: '', message: '' });
+    if (security.newPassword !== security.confirmPassword) {
+      return setSecurityStatus({ type: 'error', message: 'New passwords do not match.' });
+    }
+    if (security.newPassword.length < 6) {
+      return setSecurityStatus({ type: 'error', message: 'Password must be at least 6 characters.' });
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          currentPassword: security.currentPassword,
+          newPassword: security.newPassword
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setSecurityStatus({ type: 'error', message: data.error || 'Failed to change password.' });
+      } else {
+        setSecurityStatus({ type: 'success', message: 'Password updated successfully.' });
+        setSecurity({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      }
+    } catch (err) {
+      setSecurityStatus({ type: 'error', message: 'An unexpected error occurred.' });
+    }
   };
 
   return (
@@ -78,6 +127,10 @@ export default function SettingsPage() {
           <TabsTrigger value="preferences" className="w-full justify-start gap-3 py-3 px-4 text-left font-semibold">
             <GearIcon className="w-4 h-4" />
             App Preferences
+          </TabsTrigger>
+          <TabsTrigger value="security" className="w-full justify-start gap-3 py-3 px-4 text-left font-semibold">
+            <Lock className="w-4 h-4" />
+            Security
           </TabsTrigger>
         </TabsList>
 
@@ -327,6 +380,61 @@ export default function SettingsPage() {
                 <Button onClick={() => handleSave('App Preferences')} className="bg-blue-600 hover:bg-blue-700 text-white gap-2 font-bold px-6 shadow-md shadow-blue-200">
                   <Save className="w-4 h-4" />
                   Save Preferences
+                </Button>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* Security Content */}
+          <TabsContent value="security" className="mt-0 space-y-6">
+            <div className="bg-white/60 backdrop-blur-md rounded-2xl border border-slate-200 p-6 md:p-8 shadow-sm">
+              <h2 className="text-xl font-bold text-slate-800 mb-6">Security Settings</h2>
+              
+              <div className="space-y-6 max-w-md">
+                {securityStatus.message && (
+                  <div className={`p-3 rounded-lg text-sm font-medium ${securityStatus.type === 'error' ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-green-50 text-green-600 border border-green-200'}`}>
+                    {securityStatus.message}
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  <Label htmlFor="currentPassword" className="text-slate-700 font-semibold">Current Password</Label>
+                  <Input 
+                    type="password" 
+                    id="currentPassword" 
+                    name="currentPassword" 
+                    value={security.currentPassword} 
+                    onChange={handleSecurityChange}
+                    className="bg-white border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" 
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="newPassword" className="text-slate-700 font-semibold">New Password</Label>
+                  <Input 
+                    type="password" 
+                    id="newPassword" 
+                    name="newPassword" 
+                    value={security.newPassword} 
+                    onChange={handleSecurityChange}
+                    className="bg-white border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" 
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="confirmPassword" className="text-slate-700 font-semibold">Confirm New Password</Label>
+                  <Input 
+                    type="password" 
+                    id="confirmPassword" 
+                    name="confirmPassword" 
+                    value={security.confirmPassword} 
+                    onChange={handleSecurityChange}
+                    className="bg-white border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" 
+                  />
+                </div>
+              </div>
+
+              <div className="mt-8 pt-6 border-t border-slate-100 flex justify-end">
+                <Button onClick={handleSaveSecurity} className="bg-blue-600 hover:bg-blue-700 text-white gap-2 font-bold px-6 shadow-md shadow-blue-200">
+                  <Save className="w-4 h-4" />
+                  Update Password
                 </Button>
               </div>
             </div>

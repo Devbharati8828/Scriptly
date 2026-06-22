@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useData } from '@/context/DataContext';
 import { getStatusColor } from '@/lib/utils';
+import { toast } from 'react-hot-toast';
 
 export default function PriorAuthPage() {
   const { priorAuths } = useData();
@@ -243,14 +244,14 @@ export default function PriorAuthPage() {
               Submit lab results or medical notes to support authorization.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-6 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center bg-slate-50 hover:bg-slate-100 cursor-pointer transition-colors" onClick={() => alert('File selector opened (mock)')}>
+          <div className="py-6 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center bg-slate-50 hover:bg-slate-100 cursor-pointer transition-colors" onClick={() => toast.success('File selector opened (mock)')}>
             <UploadCloud className="w-8 h-8 text-slate-400 mb-2" />
             <p className="text-sm font-semibold text-slate-600">Click to select files or drag & drop</p>
             <p className="text-xs text-slate-400 mt-1">PDF, JPG, PNG up to 10MB</p>
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setIsUploadOpen(false)} className="w-full">Cancel</Button>
-            <Button onClick={() => { alert('Documents uploaded successfully!'); setIsUploadOpen(false); }} className="w-full bg-blue-600 hover:bg-blue-700 text-white">Upload Files</Button>
+            <Button onClick={() => { toast.success('Documents uploaded successfully!'); setIsUploadOpen(false); }} className="w-full bg-blue-600 hover:bg-blue-700 text-white">Upload Files</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -318,7 +319,7 @@ export default function PriorAuthPage() {
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setIsPharmacyOpen(false)} className="w-full">Cancel</Button>
-            <Button onClick={() => { alert('Transfer request submitted to pharmacy!'); setIsPharmacyOpen(false); }} className="w-full bg-blue-600 hover:bg-blue-700 text-white">Confirm Transfer</Button>
+            <Button onClick={() => { toast.success('Transfer request submitted to pharmacy!'); setIsPharmacyOpen(false); }} className="w-full bg-blue-600 hover:bg-blue-700 text-white">Confirm Transfer</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

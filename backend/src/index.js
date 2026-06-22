@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { pool } from './db.js';
 import apiRoutes from './routes/api.js';
+import authRoutes from './routes/auth.js';
 
 dotenv.config();
 
@@ -18,7 +19,10 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Scriptly API is running' });
 });
 
-// API Routes
+// Auth Routes (public — no JWT required)
+app.use('/api/auth', authRoutes);
+
+// API Routes (protected — requireAuth applied per-route in api.js)
 app.use('/api', apiRoutes);
 
 // Start server
