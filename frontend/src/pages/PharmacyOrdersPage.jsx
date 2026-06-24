@@ -31,9 +31,12 @@ export default function PharmacyOrdersPage() {
   const renderOrdersList = (orders) => {
     if (orders.length === 0) {
       return (
-        <div className="text-center py-12 bg-white/50 backdrop-blur-md rounded-2xl border border-slate-200 shadow-sm animate-fade-in">
-          <p className="text-slate-500 font-semibold text-lg">No pharmacy orders found</p>
-          <p className="text-slate-400 text-sm mt-1">There are no orders matching this category.</p>
+        <div className="text-center py-16 bg-white/50 backdrop-blur-md rounded-2xl border border-slate-200 shadow-sm animate-fade-in">
+          <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <Truck className="w-8 h-8 text-slate-400" />
+          </div>
+          <p className="text-slate-700 font-bold text-lg">No orders yet</p>
+          <p className="text-slate-400 text-sm mt-2 max-w-xs mx-auto">When you request a refill or place a pharmacy order, it will appear here for tracking.</p>
         </div>
       );
     }

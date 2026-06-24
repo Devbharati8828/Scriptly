@@ -4,6 +4,8 @@ import dotenv from 'dotenv';
 import { pool } from './db.js';
 import apiRoutes from './routes/api.js';
 import authRoutes from './routes/auth.js';
+import reportsRoutes from './routes/reports.js';
+import aiRoutes from './routes/ai.js';
 
 dotenv.config();
 
@@ -24,6 +26,8 @@ app.use('/api/auth', authRoutes);
 
 // API Routes (protected — requireAuth applied per-route in api.js)
 app.use('/api', apiRoutes);
+app.use('/api/reports', reportsRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Start server
 app.listen(PORT, () => {

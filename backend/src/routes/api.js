@@ -133,17 +133,56 @@ router.patch('/medications/:id', async (req, res) => {
       return res.status(400).json({ error: 'Invalid medication ID.' });
     }
 
-    const { pillCount } = req.body;
+    const { pillCount, frequency } = req.body;
 
-    // ── Input validation ──────────────────────────────────────────────────────
-    if (pillCount === undefined || pillCount === null) {
-      return res.status(400).json({ error: 'pillCount is required.' });
+    // Ensure the medication belongs to the authenticated user
+    const [owned] = await pool.query(
+      'SELECT id, pillCount, status, frequency FROM Medication WHERE id = ? AND userId = ?',
+      [id, req.user.userId]
+    );
+    if (owned.length === 0) {
+      return res.status(404).json({ error: 'Medication not found.' });
     }
-    const parsed = Number(pillCount);
-    if (isNaN(parsed) || parsed < 0 || !Number.isInteger(parsed)) {
-      return res.status(400).json({ error: 'pillCount must be a non-negative integer.' });
+
+    let updatedPillCount = owned[0].pillCount;
+    let status = owned[0].status;
+    let updatedFrequency = owned[0].frequency;
+
+    if (pillCount !== undefined && pillCount !== null) {
+      const parsed = Number(pillCount);
+      if (isNaN(parsed) || parsed < 0 || !Number.isInteger(parsed)) {
+        return res.status(400).json({ error: 'pillCount must be a non-negative integer.' });
+      }
+      updatedPillCount = parsed;
+      status = 'ACTIVE';
+      if (parsed === 0)     status = 'PENDING_REFILL';
+      else if (parsed <= 5) status = 'LOW_SUPPLY';
     }
-    // ─────────────────────────────────────────────────────────────────────────
+
+    if (frequency !== undefined && typeof frequency === 'string') {
+      updatedFrequency = frequency.trim();
+    }
+
+    await pool.query(
+      'UPDATE Medication SET pillCount = ?, status = ?, frequency = ?, updatedAt = NOW() WHERE id = ?',
+      [updatedPillCount, status, updatedFrequency, id]
+    );
+
+    const [updatedMedResult] = await pool.query('SELECT * FROM Medication WHERE id = ?', [id]);
+    res.json(updatedMedResult[0]);
+  } catch (error) {
+    console.error('[PATCH /api/medications/:id]', error);
+    res.status(500).json({ error: 'Failed to update medication.' });
+  }
+});
+
+// ─── DELETE /api/medications/:id ─────────────────────────────────────────────
+router.delete('/medications/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id || typeof id !== 'string') {
+      return res.status(400).json({ error: 'Invalid medication ID.' });
+    }
 
     // Ensure the medication belongs to the authenticated user
     const [owned] = await pool.query(
@@ -154,20 +193,15 @@ router.patch('/medications/:id', async (req, res) => {
       return res.status(404).json({ error: 'Medication not found.' });
     }
 
-    let status = 'ACTIVE';
-    if (parsed === 0)     status = 'PENDING_REFILL';
-    else if (parsed <= 5) status = 'LOW_SUPPLY';
+    // Delete related records to maintain integrity
+    await pool.query('DELETE FROM DoseLog WHERE medicationId = ?', [id]);
+    await pool.query('DELETE FROM RefillRequest WHERE medicationId = ?', [id]);
+    await pool.query('DELETE FROM Medication WHERE id = ?', [id]);
 
-    await pool.query(
-      'UPDATE Medication SET pillCount = ?, status = ?, updatedAt = NOW() WHERE id = ?',
-      [parsed, status, id]
-    );
-
-    const [updatedMedResult] = await pool.query('SELECT * FROM Medication WHERE id = ?', [id]);
-    res.json(updatedMedResult[0]);
+    res.json({ success: true, message: 'Medication deleted successfully' });
   } catch (error) {
-    console.error('[PATCH /api/medications/:id]', error);
-    res.status(500).json({ error: 'Failed to update medication.' });
+    console.error('[DELETE /api/medications/:id]', error);
+    res.status(500).json({ error: 'Failed to delete medication.' });
   }
 });
 

@@ -31,6 +31,7 @@ export default function MedicationsPage() {
   const [isRefillOpen, setIsRefillOpen] = useState(false);
   const [isEditScheduleOpen, setIsEditScheduleOpen] = useState(false);
   const [isDiscontinueOpen, setIsDiscontinueOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     brandName: '',
     genericName: '',
@@ -38,13 +39,56 @@ export default function MedicationsPage() {
     frequency: 'Once daily',
     pillCount: '30',
     totalPills: '30',
-    pharmacyId: 'CVS Pharmacy — Main St',
+    pharmacyId: 'Apollo Pharmacy — MG Road',
   });
+  const [editScheduleTime, setEditScheduleTime] = useState('Daily at 08:00 AM');
 
   const API_URL = import.meta.env.VITE_API_URL;
 
+  const handleEditSchedule = async () => {
+    if (!selectedMed) return;
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(`${API_URL}/api/medications/${selectedMed.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ frequency: editScheduleTime }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update schedule');
+      toast.success('Schedule updated successfully!');
+      setIsEditScheduleOpen(false);
+      refetch();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDiscontinue = async () => {
+    if (!selectedMed) return;
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(`${API_URL}/api/medications/${selectedMed.id}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete medication');
+      toast.success('Medication deleted successfully.');
+      setIsDiscontinueOpen(false);
+      refetch();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleRefillRequest = async () => {
     if (!selectedMed) return;
+    setIsSubmitting(true);
     try {
       const res = await fetch(`${API_URL}/api/medications/${selectedMed.id}/refill`, {
         method: 'POST',
@@ -57,6 +101,8 @@ export default function MedicationsPage() {
       refetch();
     } catch (err) {
       toast.error(err.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -73,7 +119,7 @@ export default function MedicationsPage() {
     });
     if (success) {
       setIsOpen(false);
-      setFormData({ brandName: '', genericName: '', dosage: '', frequency: 'Once daily', pillCount: '30', totalPills: '30', pharmacyId: 'CVS Pharmacy — Main St' });
+      setFormData({ brandName: '', genericName: '', dosage: '', frequency: 'Once daily', pillCount: '30', totalPills: '30', pharmacyId: 'Apollo Pharmacy — MG Road' });
     }
   };
 
@@ -141,8 +187,9 @@ export default function MedicationsPage() {
                 <div className="space-y-1">
                   <Label htmlFor="pharmacyId" className="text-slate-700">Pharmacy</Label>
                   <select id="pharmacyId" value={formData.pharmacyId} onChange={(e) => setFormData({ ...formData, pharmacyId: e.target.value })} className="w-full h-9 rounded-md border px-3 py-1 text-sm shadow-sm focus-visible:outline-none bg-slate-50 border-slate-200 focus:bg-white">
-                    <option value="CVS Pharmacy — Main St">CVS Pharmacy — Main St</option>
-                    <option value="Walgreens — Oak Ave">Walgreens — Oak Ave</option>
+                    <option value="Apollo Pharmacy — MG Road">Apollo Pharmacy — MG Road</option>
+                    <option value="MedPlus — Koramangala">MedPlus — Koramangala</option>
+                    <option value="Netmeds Store — Indiranagar">Netmeds Store — Indiranagar</option>
                   </select>
                 </div>
                 <DialogFooter className="pt-4">
@@ -176,8 +223,8 @@ export default function MedicationsPage() {
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => { setSelectedMed(med); setIsDetailsOpen(true); }}>View Details</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => { setSelectedMed(med); setIsRefillOpen(true); }}>Request Refill</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => { setSelectedMed(med); setIsEditScheduleOpen(true); }}>Edit Schedule</DropdownMenuItem>
-                    <DropdownMenuItem className="text-red-600" onClick={() => { setSelectedMed(med); setIsDiscontinueOpen(true); }}>Discontinue</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => { setSelectedMed(med); setEditScheduleTime(med.frequency); setIsEditScheduleOpen(true); }}>Edit Schedule</DropdownMenuItem>
+                    <DropdownMenuItem className="text-red-600" onClick={() => { setSelectedMed(med); setIsDiscontinueOpen(true); }}>Delete</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -206,10 +253,11 @@ export default function MedicationsPage() {
                   <Badge variant="outline" className={`capitalize font-semibold border ${getStatusColor(med.status)}`}>{med.status?.replace('-', ' ')}</Badge>
                 </div>
                 <Button size="sm"
-                  className={isUrgent ? 'bg-green-500 hover:bg-green-600 text-white shadow-sm shadow-green-200' : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm'}
-                  onClick={() => { setSelectedMed(med); if (isUrgent) setIsRefillOpen(true); else setIsDetailsOpen(true); }}
+                  className={med.status === 'pending-refill' ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : isUrgent ? 'bg-green-500 hover:bg-green-600 text-white shadow-sm shadow-green-200' : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm'}
+                  onClick={() => { if (med.status === 'pending-refill') return; setSelectedMed(med); if (isUrgent) setIsRefillOpen(true); else setIsDetailsOpen(true); }}
+                  disabled={med.status === 'pending-refill'}
                 >
-                  {isUrgent ? 'Refill Now' : 'Details'}
+                  {med.status === 'pending-refill' ? 'Pending' : isUrgent ? 'Refill Now' : 'Details'}
                 </Button>
               </div>
             </motion.div>
@@ -248,9 +296,11 @@ export default function MedicationsPage() {
             <DialogDescription className="text-slate-500">Submit a refill request for {selectedMed?.brandName} to {selectedMed?.pharmacy}.</DialogDescription>
           </DialogHeader>
           <div className="py-4 text-sm text-slate-600"><p>Your current refill will be ordered and routed to your pharmacy. Standard co-payments will apply upon pickup or delivery.</p></div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setIsRefillOpen(false)} className="w-full">Cancel</Button>
-            <Button onClick={handleRefillRequest} className="w-full bg-blue-600 hover:bg-blue-700 text-white">Request Refill</Button>
+          <DialogFooter className="gap-2 sm:gap-0 mt-6">
+            <Button variant="outline" onClick={() => setIsRefillOpen(false)} className="w-full" disabled={isSubmitting}>Cancel</Button>
+            <Button onClick={handleRefillRequest} className="w-full bg-blue-600 hover:bg-blue-700 text-white" disabled={isSubmitting}>
+              {isSubmitting ? 'Submitting...' : 'Request Refill'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -265,31 +315,39 @@ export default function MedicationsPage() {
           <div className="space-y-4 py-4">
             <div className="space-y-1">
               <Label className="text-slate-700">Reminder Time</Label>
-              <select className="w-full h-9 rounded-md border border-slate-200 bg-slate-50 px-3 py-1 text-sm shadow-sm focus:bg-white focus:outline-none">
-                <option value="08:00">08:00 AM</option>
-                <option value="12:00">12:00 PM</option>
-                <option value="20:00">08:00 PM</option>
+              <select 
+                value={editScheduleTime}
+                onChange={(e) => setEditScheduleTime(e.target.value)}
+                className="w-full h-9 rounded-md border border-slate-200 bg-slate-50 px-3 py-1 text-sm shadow-sm focus:bg-white focus:outline-none"
+              >
+                <option value="Daily at 08:00 AM">08:00 AM</option>
+                <option value="Daily at 12:00 PM">12:00 PM</option>
+                <option value="Daily at 08:00 PM">08:00 PM</option>
               </select>
             </div>
           </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setIsEditScheduleOpen(false)} className="w-full">Cancel</Button>
-            <Button onClick={() => { toast.success('Schedule updated successfully!'); setIsEditScheduleOpen(false); }} className="w-full bg-blue-600 hover:bg-blue-700 text-white">Save Changes</Button>
+          <DialogFooter className="gap-2 sm:gap-0 mt-6">
+            <Button variant="outline" onClick={() => setIsEditScheduleOpen(false)} className="w-full" disabled={isSubmitting}>Cancel</Button>
+            <Button onClick={handleEditSchedule} className="w-full bg-blue-600 hover:bg-blue-700 text-white" disabled={isSubmitting}>
+              {isSubmitting ? 'Saving...' : 'Save Changes'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Discontinue Dialog */}
+      {/* Delete Dialog */}
       <Dialog open={isDiscontinueOpen} onOpenChange={setIsDiscontinueOpen}>
         <DialogContent className="sm:max-w-[400px] bg-white p-6 rounded-2xl shadow-xl text-slate-800">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-red-600">Discontinue Medication?</DialogTitle>
-            <DialogDescription className="text-slate-500">Are you sure you want to discontinue {selectedMed?.brandName}?</DialogDescription>
+            <DialogTitle className="text-xl font-bold text-red-600">Delete Medication?</DialogTitle>
+            <DialogDescription className="text-slate-500">Are you sure you want to delete {selectedMed?.brandName}?</DialogDescription>
           </DialogHeader>
           <div className="py-4 text-sm text-slate-600"><p className="text-red-500 font-medium">Warning: This will stop all automated refill scheduling and caregiver updates for this medication.</p></div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setIsDiscontinueOpen(false)} className="w-full">Cancel</Button>
-            <Button onClick={() => { toast.success('Medication discontinued successfully.'); setIsDiscontinueOpen(false); }} className="w-full bg-red-600 hover:bg-red-700 text-white">Discontinue</Button>
+          <DialogFooter className="gap-2 sm:gap-0 mt-6">
+            <Button variant="outline" onClick={() => setIsDiscontinueOpen(false)} className="w-full" disabled={isSubmitting}>Cancel</Button>
+            <Button onClick={handleDiscontinue} className="w-full bg-red-600 hover:bg-red-700 text-white" disabled={isSubmitting}>
+              {isSubmitting ? 'Deleting...' : 'Delete'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

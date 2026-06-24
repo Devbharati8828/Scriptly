@@ -26,36 +26,36 @@ const costData = [
 const pharmacies = [
   {
     id: 'ph1',
-    name: 'CVS Pharmacy — Main St',
-    address: '1234 Main Street, Suite 100',
-    phone: '(555) 234-5678',
-    distance: '0.8 mi',
+    name: 'Apollo Pharmacy — MG Road',
+    address: '12, Mahatma Gandhi Road, Bengaluru',
+    phone: '+91 80 2345 6789',
+    distance: '0.8 km',
     rating: 4.5,
     deliveryAvailable: true,
     hours: '8:00 AM – 10:00 PM',
-    acceptedInsurance: ['Blue Cross Blue Shield', 'Aetna', 'United Healthcare'],
+    acceptedInsurance: ['Star Health', 'HDFC ERGO', 'Bajaj Allianz'],
   },
   {
     id: 'ph2',
-    name: 'Walgreens — Oak Ave',
-    address: '567 Oak Avenue',
-    phone: '(555) 345-6789',
-    distance: '1.2 mi',
+    name: 'MedPlus — Koramangala',
+    address: '45, 80 Feet Road, Koramangala, Bengaluru',
+    phone: '+91 80 3456 7890',
+    distance: '1.2 km',
     rating: 4.2,
     deliveryAvailable: true,
     hours: '7:00 AM – 11:00 PM',
-    acceptedInsurance: ['Blue Cross Blue Shield', 'Cigna', 'United Healthcare'],
+    acceptedInsurance: ['Star Health', 'ICICI Lombard', 'Bajaj Allianz'],
   },
   {
     id: 'ph3',
-    name: 'Rite Aid — Elm Blvd',
-    address: '890 Elm Boulevard',
-    phone: '(555) 456-7890',
-    distance: '2.1 mi',
+    name: 'Netmeds Store — Indiranagar',
+    address: '100 Feet Road, Indiranagar, Bengaluru',
+    phone: '+91 80 4567 8901',
+    distance: '2.1 km',
     rating: 3.9,
     deliveryAvailable: false,
     hours: '9:00 AM – 9:00 PM',
-    acceptedInsurance: ['Blue Cross Blue Shield', 'Aetna'],
+    acceptedInsurance: ['Star Health', 'HDFC ERGO'],
   },
 ];
 
@@ -73,14 +73,14 @@ const staticCareCircleMembers = [
   },
   {
     id: 'cc2',
-    name: 'Anna',
-    role: 'caregiver',
-    relationship: 'Anna (Caregiver)',
-    avatar: '/avatars/anna.jpg',
+    name: 'Scriptly AI',
+    role: 'ai-assistant',
+    relationship: 'AI Health Assistant',
+    avatar: '🤖',
     permission: 'action-enabled',
-    email: 'anna@example.com',
-    phone: '(555) 987-6543',
-    lastActive: '2026-05-20T02:50:00Z',
+    email: 'ai@scriptly.com',
+    phone: '',
+    lastActive: new Date().toISOString(),
   },
 ];
 
@@ -105,7 +105,7 @@ export function DataProvider({ children }) {
   const [priorAuths, setPriorAuths] = useState([]);
   const [pharmacyOrders, setPharmacyOrders] = useState([]);
   const [reminders, setReminders] = useState([]);
-  const [careCircleMembers] = useState(staticCareCircleMembers);
+  const [careCircleMembers, setCareCircleMembers] = useState(staticCareCircleMembers);
   const [caregiverUpdates, setCaregiverUpdates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -149,7 +149,7 @@ export function DataProvider({ children }) {
           insuranceProvider: 'Blue Cross Blue Shield',
           insurancePlan: 'PPO Gold',
           memberId: 'BCBS-88421930',
-          primaryPharmacy: 'CVS Pharmacy — Main St',
+          primaryPharmacy: 'Apollo Pharmacy — MG Road',
           primaryDoctor: 'Dr. Patel',
         });
       }
@@ -189,7 +189,7 @@ export function DataProvider({ children }) {
             daysLeft: dbMed.pillCount,
             totalDays: dbMed.totalPills,
             nextRefillDate: dbMed.nextRefillDate ? dbMed.nextRefillDate.split('T')[0] : '',
-            pharmacy: dbMed.pharmacyId || 'CVS Pharmacy — Main St',
+            pharmacy: dbMed.pharmacyId || 'Apollo Pharmacy — MG Road',
             prescriber: 'Dr. Patel',
             status,
             icon,
@@ -284,13 +284,13 @@ export function DataProvider({ children }) {
               ];
 
           let meds = ['Metformin 1000mg', 'Lisinopril 10mg'];
-          let pharmacyAddress = '1234 Main Street, Suite 100';
-          let pharmacyPhone = '(555) 234-5678';
+          let pharmacyAddress = '12, Mahatma Gandhi Road, Bengaluru';
+          let pharmacyPhone = '+91 80 2345 6789';
 
-          if (dbOrder.pharmacyId && dbOrder.pharmacyId.includes('Walgreens')) {
+          if (dbOrder.pharmacyId && (dbOrder.pharmacyId.includes('Walgreens') || dbOrder.pharmacyId.includes('MedPlus'))) {
             meds = ['Ozempic 0.5mg'];
-            pharmacyAddress = '567 Oak Avenue';
-            pharmacyPhone = '(555) 345-6789';
+            pharmacyAddress = '45, 80 Feet Road, Koramangala, Bengaluru';
+            pharmacyPhone = '+91 80 3456 7890';
           }
 
           return {
@@ -364,8 +364,8 @@ export function DataProvider({ children }) {
         const mappedAlerts = data.alerts.map((dbAlert) => ({
           id: dbAlert.id,
           caregiverId: dbAlert.caregiverId,
-          caregiverName: dbAlert.caregiverName || 'Caregiver',
-          caregiverAvatar: dbAlert.caregiverName === 'Dr. Patel' ? '/avatars/dr-patel.jpg' : '/avatars/anna.jpg',
+          caregiverName: dbAlert.caregiverName === 'Anna' ? 'Scriptly AI' : dbAlert.caregiverName,
+          caregiverAvatar: dbAlert.caregiverName === 'Dr. Patel' ? '/avatars/dr-patel.jpg' : '🤖',
           action: dbAlert.action,
           actionType: dbAlert.actionType.toLowerCase(),
           timestamp: formatAlertTimestamp(dbAlert.timestamp),
@@ -411,6 +411,29 @@ export function DataProvider({ children }) {
     return false;
   };
 
+  const addCareCircleMember = (member) => {
+    setCareCircleMembers(prev => [
+      ...prev,
+      {
+        id: `cc-${Date.now()}`,
+        name: member.name,
+        role: 'caregiver',
+        relationship: member.relationship,
+        avatar: '',
+        permission: member.permission,
+        email: member.email,
+        phone: '',
+        lastActive: new Date().toISOString(),
+      },
+    ]);
+  };
+
+  const updateCareCircleMemberPermission = (memberId, newPermission) => {
+    setCareCircleMembers(prev =>
+      prev.map(m => m.id === memberId ? { ...m, permission: newPermission } : m)
+    );
+  };
+
   useEffect(() => {
     fetchData();
     // Re-fetch whenever auth state changes (e.g. after login)
@@ -446,6 +469,8 @@ export function DataProvider({ children }) {
         refetch: fetchData,
         updateMedicationPills,
         addMedication,
+        addCareCircleMember,
+        updateCareCircleMemberPermission,
       }}
     >
       {children}

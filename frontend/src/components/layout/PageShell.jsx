@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import AIChatBot from '@/components/AIChatBot';
 import { useSidebar } from '@/context/SidebarContext';
 import { useData } from '@/context/DataContext';
 import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
@@ -58,6 +59,7 @@ export default function PageShell() {
           )}
         </main>
       </div>
+      <AIChatBot />
     </div>
   );
 }

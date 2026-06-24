@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Users, Mail, Phone, Settings2, MoreHorizontal, ShieldAlert, Zap, Share2 } from 'lucide-react';
+import { Users, Mail, Phone, Settings2, MoreHorizontal, ShieldAlert, Zap, Share2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -12,11 +12,13 @@ import { getInitials } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 
 export default function CareCirclePage() {
-  const { careCircleMembers } = useData();
+  const { careCircleMembers, addCareCircleMember, updateCareCircleMemberPermission } = useData();
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [isMessageOpen, setIsMessageOpen] = useState(false);
+  const [isEditPermOpen, setIsEditPermOpen] = useState(false);
   const [activeMember, setActiveMember] = useState(null);
+  const [editPermission, setEditPermission] = useState('view-only');
   const [relayMed, setRelayMed] = useState('Atorvastatin 20mg');
   const [inviteForm, setInviteForm] = useState({
     name: '',
@@ -25,8 +27,12 @@ export default function CareCirclePage() {
     permission: 'view-only',
   });
 
+  // Filter out AI assistant — it's now a floating chatbot
+  const humanMembers = careCircleMembers.filter((m) => m.role !== 'ai-assistant');
+
   const handleInviteSubmit = (e) => {
     e.preventDefault();
+    addCareCircleMember(inviteForm);
     toast.success(`Invitation sent to ${inviteForm.name} (${inviteForm.email})!`);
     setIsInviteOpen(false);
     setInviteForm({
@@ -35,6 +41,13 @@ export default function CareCirclePage() {
       relationship: 'Family Member',
       permission: 'view-only',
     });
+  };
+
+  const handleSavePermission = () => {
+    if (!activeMember) return;
+    updateCareCircleMemberPermission(activeMember.id, editPermission);
+    toast.success(`Permissions updated for ${activeMember.name}`);
+    setIsEditPermOpen(false);
   };
 
   const containerVariants = {
@@ -91,7 +104,7 @@ export default function CareCirclePage() {
                 <Label htmlFor="memberName" className="text-slate-700">Full Name</Label>
                 <Input
                   id="memberName"
-                  placeholder="e.g. Jane Doe"
+                  placeholder="e.g. Rahul Sharma"
                   value={inviteForm.name}
                   onChange={(e) => setInviteForm({ ...inviteForm, name: e.target.value })}
                   required
@@ -103,7 +116,7 @@ export default function CareCirclePage() {
                 <Input
                   id="memberEmail"
                   type="email"
-                  placeholder="e.g. jane@example.com"
+                  placeholder="e.g. rahul@example.com"
                   value={inviteForm.email}
                   onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
                   required
@@ -195,7 +208,7 @@ export default function CareCirclePage() {
                 >
                   <option value="Atorvastatin 20mg">Atorvastatin 20mg</option>
                   <option value="Lisinopril 10mg">Lisinopril 10mg</option>
-                  <option value="Zoloft 50mg">Zoloft 50mg</option>
+                  <option value="Metformin 1000mg">Metformin 1000mg</option>
                 </select>
               </div>
               <div className="space-y-1">
@@ -232,7 +245,7 @@ export default function CareCirclePage() {
         animate="show"
         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
       >
-        {careCircleMembers.map((member) => (
+        {humanMembers.map((member) => (
           <motion.div key={member.id} variants={itemVariants} className="glass-card rounded-2xl p-6 relative overflow-hidden group">
             
             <div className="flex justify-between items-start mb-6">
@@ -253,11 +266,21 @@ export default function CareCirclePage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem className="gap-2">
+                  <DropdownMenuItem
+                    className="gap-2"
+                    onClick={() => {
+                      setActiveMember(member);
+                      setEditPermission(member.permission);
+                      setIsEditPermOpen(true);
+                    }}
+                  >
                     <Settings2 className="w-4 h-4 text-slate-500" />
                     Edit Permissions
                   </DropdownMenuItem>
-                  <DropdownMenuItem className="gap-2 text-red-600">
+                  <DropdownMenuItem
+                    className="gap-2 text-red-600"
+                    onClick={() => toast.success(`Access revoked for ${member.name}`)}
+                  >
                     <ShieldAlert className="w-4 h-4" />
                     Revoke Access
                   </DropdownMenuItem>
@@ -296,6 +319,51 @@ export default function CareCirclePage() {
           </motion.div>
         ))}
       </motion.div>
+
+      {/* Edit Permissions Modal */}
+      <Dialog open={isEditPermOpen} onOpenChange={setIsEditPermOpen}>
+        <DialogContent className="sm:max-w-[380px] bg-white p-6 rounded-2xl shadow-xl text-slate-800">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-slate-800">Edit Permissions</DialogTitle>
+            <DialogDescription className="text-slate-500">
+              Change access level for {activeMember?.name}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <Label className="text-slate-700 font-semibold">Permission Level</Label>
+            <div className="space-y-3">
+              {[
+                { value: 'view-only', label: 'View Only', desc: 'Can view medication list and schedules only.' },
+                { value: 'action-enabled', label: 'Action Enabled', desc: 'Can log doses and request refills on your behalf.' },
+                { value: 'full-access', label: 'Full Access', desc: 'Full control including prior auths and pharmacy orders.' },
+              ].map(opt => (
+                <label
+                  key={opt.value}
+                  className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${editPermission === opt.value ? 'border-blue-500 bg-blue-50' : 'border-slate-100 hover:border-blue-200 bg-white'}`}
+                >
+                  <input
+                    type="radio"
+                    name="permission"
+                    value={opt.value}
+                    checked={editPermission === opt.value}
+                    onChange={() => setEditPermission(opt.value)}
+                    className="mt-1 accent-blue-600"
+                  />
+                  <div>
+                    <p className="font-bold text-slate-800 text-sm">{opt.label}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{opt.desc}</p>
+                  </div>
+                  {editPermission === opt.value && <Check className="w-4 h-4 text-blue-600 ml-auto mt-1 shrink-0" />}
+                </label>
+              ))}
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsEditPermOpen(false)} className="w-full">Cancel</Button>
+            <Button onClick={handleSavePermission} className="w-full bg-blue-600 hover:bg-blue-700 text-white">Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Message Modal */}
       <Dialog open={isMessageOpen} onOpenChange={setIsMessageOpen}>

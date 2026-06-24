@@ -7,10 +7,49 @@ import { Button } from '@/components/ui/button';
 
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useData } from '@/context/DataContext';
+import { useAuth } from '@/context/AuthContext';
 
 export default function ReportsPage() {
   const { adherenceData, costData, medications } = useData();
+  const { authHeaders } = useAuth();
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const API_URL = import.meta.env.VITE_API_URL;
+
+  // Calculate dynamic stats
+  const hasData = medications.length > 0;
+  const avgAdherence = hasData ? Math.round(adherenceData.reduce((sum, d) => sum + d.adherenceRate, 0) / adherenceData.length) : 0;
+  const totalRefillsOnTime = hasData ? adherenceData.reduce((sum, d) => sum + d.refillsOnTime, 0) : 0;
+  const totalRefills = hasData ? adherenceData.reduce((sum, d) => sum + d.refillsOnTime + d.refillsLate, 0) : 0;
+  const totalSavings = hasData ? costData.reduce((sum, d) => sum + d.savings, 0) : 0;
+
+  const handleExportReport = async () => {
+    setIsExporting(true);
+    try {
+      const res = await fetch(`${API_URL}/api/reports/claims`, {
+        method: 'GET',
+        headers: authHeaders(),
+      });
+      if (!res.ok) throw new Error('Failed to fetch report');
+      
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = 'claims_report.pdf';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('Claims pack downloaded successfully');
+      setIsExportOpen(false);
+    } catch (err) {
+      toast.error('Export failed, please try again');
+    } finally {
+      setIsExporting(false);
+    }
+  };
   
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -56,13 +95,16 @@ export default function ReportsPage() {
                 <div className="bg-blue-100 p-3 rounded-xl text-blue-600">
                   <Activity className="w-6 h-6" />
                 </div>
-                <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
-                  <TrendingUp className="w-3 h-3 mr-1" />
-                  +2.4%
-                </Badge>
+                {hasData && (
+                  <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+                    <TrendingUp className="w-3 h-3 mr-1" />
+                    +2.4%
+                  </Badge>
+                )}
              </div>
              <h3 className="text-slate-500 text-sm font-medium">Avg Adherence Rate</h3>
-             <p className="text-3xl font-bold text-slate-800 mt-1">93%</p>
+             <p className="text-3xl font-bold text-slate-800 mt-1">{hasData ? `${avgAdherence}%` : '—'}</p>
+             {!hasData && <p className="text-xs text-slate-400 mt-1">Add medications to track adherence</p>}
           </motion.div>
 
           <motion.div variants={itemVariants} className="glass-card rounded-2xl p-6 relative overflow-hidden group">
@@ -72,7 +114,8 @@ export default function ReportsPage() {
                 </div>
              </div>
              <h3 className="text-slate-500 text-sm font-medium">Refills On Time</h3>
-             <p className="text-3xl font-bold text-slate-800 mt-1">26/28</p>
+             <p className="text-3xl font-bold text-slate-800 mt-1">{hasData ? `${totalRefillsOnTime}/${totalRefills}` : '0/0'}</p>
+             {!hasData && <p className="text-xs text-slate-400 mt-1">No refill data yet</p>}
           </motion.div>
 
           <motion.div variants={itemVariants} className="glass-card rounded-2xl p-6 relative overflow-hidden group">
@@ -80,13 +123,16 @@ export default function ReportsPage() {
                 <div className="bg-emerald-100 p-3 rounded-xl text-emerald-600">
                   <DollarSign className="w-6 h-6" />
                 </div>
-                 <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
-                  <TrendingUp className="w-3 h-3 mr-1" />
-                  +$14
-                </Badge>
+                {hasData && (
+                  <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+                    <TrendingUp className="w-3 h-3 mr-1" />
+                    +₹{Math.round(totalSavings * 0.1)}
+                  </Badge>
+                )}
              </div>
              <h3 className="text-slate-500 text-sm font-medium">Total Savings (YTD)</h3>
-             <p className="text-3xl font-bold text-slate-800 mt-1">$315</p>
+             <p className="text-3xl font-bold text-slate-800 mt-1">{hasData ? `₹${(totalSavings * 83).toLocaleString('en-IN')}` : '₹0'}</p>
+             {!hasData && <p className="text-xs text-slate-400 mt-1">Savings appear after first refill</p>}
           </motion.div>
 
           <motion.div variants={itemVariants} className="glass-card rounded-2xl p-6 relative overflow-hidden group">
@@ -191,16 +237,14 @@ export default function ReportsPage() {
               </select>
             </div>
           </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setIsExportOpen(false)} className="w-full">Cancel</Button>
+          <DialogFooter className="gap-2 sm:gap-0 mt-6">
+            <Button variant="outline" onClick={() => setIsExportOpen(false)} className="w-full" disabled={isExporting}>Cancel</Button>
             <Button 
-              onClick={() => {
-                toast.success('Claims pack generated and downloaded successfully!');
-                setIsExportOpen(false);
-              }} 
+              onClick={handleExportReport} 
               className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              disabled={isExporting}
             >
-              Export Report
+              {isExporting ? 'Exporting...' : 'Export Report'}
             </Button>
           </DialogFooter>
         </DialogContent>

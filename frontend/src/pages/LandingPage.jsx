@@ -1,11 +1,28 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
-import { Pill, ShieldCheck, MapPin, Users, ArrowRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Pill, ShieldCheck, MapPin, Users, ArrowRight, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CapsuleLogoIcon, PriorAuthShieldIcon } from '@/components/icons/CustomIcons';
+import { useAuth } from '@/context/AuthContext';
 
 export default function LandingPage() {
+  const { loginDemo } = useAuth();
+  const navigate = useNavigate();
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleDemoLogin = async () => {
+    setIsLoading(true);
+    try {
+      const success = await loginDemo();
+      if (success) {
+        navigate('/dashboard');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans selection:bg-blue-200">
       
@@ -22,12 +39,20 @@ export default function LandingPage() {
             <a href="#testimonials" className="hover:text-blue-600 transition-colors">Testimonials</a>
           </div>
           <div className="flex items-center gap-4">
-            <Link to="/login" className="font-semibold text-slate-600 hover:text-blue-600 transition-colors">Sign In</Link>
-            <Link to="/signup">
-              <Button className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-6 shadow-lg shadow-blue-200 font-bold">
-                Get Started
-              </Button>
-            </Link>
+            <button
+              onClick={handleDemoLogin}
+              disabled={isLoading}
+              className="font-semibold text-slate-600 hover:text-blue-600 transition-colors disabled:opacity-60"
+            >
+              Sign In
+            </button>
+            <Button
+              onClick={handleDemoLogin}
+              disabled={isLoading}
+              className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-6 shadow-lg shadow-blue-200 font-bold"
+            >
+              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Get Started'}
+            </Button>
           </div>
         </div>
       </nav>
@@ -77,12 +102,21 @@ export default function LandingPage() {
             transition={{ delay: 0.2 }}
             className="flex flex-col sm:flex-row items-center justify-center gap-4"
           >
-            <Link to="/signup">
-              <Button size="lg" className="h-14 px-8 text-lg bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-xl shadow-blue-200/50 group">
-                Get Started Free
-                <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </Button>
-            </Link>
+            <Button
+              size="lg"
+              onClick={handleDemoLogin}
+              disabled={isLoading}
+              className="h-14 px-8 text-lg bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-xl shadow-blue-200/50 group"
+            >
+              {isLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <>
+                  Get Started Free
+                  <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </>
+              )}
+            </Button>
             <a href="#how-it-works">
               <Button size="lg" variant="outline" className="h-14 px-8 text-lg border-2 border-slate-200 text-slate-700 rounded-full hover:bg-slate-50">
                 See How It Works

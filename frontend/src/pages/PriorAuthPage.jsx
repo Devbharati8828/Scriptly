@@ -20,9 +20,12 @@ export default function PriorAuthPage() {
   const renderAuthsList = (auths) => {
     if (auths.length === 0) {
       return (
-        <div className="text-center py-12 bg-white/50 backdrop-blur-md rounded-2xl border border-slate-200 shadow-sm">
-          <p className="text-slate-500 font-semibold text-lg">No prior authorizations found</p>
-          <p className="text-slate-400 text-sm mt-1">There are no requests matching this category.</p>
+        <div className="text-center py-16 bg-white/50 backdrop-blur-md rounded-2xl border border-slate-200 shadow-sm">
+          <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <ShieldCheck className="w-8 h-8 text-blue-400" />
+          </div>
+          <p className="text-slate-700 font-bold text-lg">No prior authorizations yet</p>
+          <p className="text-slate-400 text-sm mt-2 max-w-xs mx-auto">When your prescriptions require insurance pre-approval, they will appear here automatically.</p>
         </div>
       );
     }
@@ -244,11 +247,22 @@ export default function PriorAuthPage() {
               Submit lab results or medical notes to support authorization.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-6 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center bg-slate-50 hover:bg-slate-100 cursor-pointer transition-colors" onClick={() => toast.success('File selector opened (mock)')}>
+          <label className="py-6 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center bg-slate-50 hover:bg-slate-100 cursor-pointer transition-colors w-full">
+            <input 
+              type="file" 
+              className="hidden" 
+              multiple 
+              accept=".pdf,.jpg,.jpeg,.png"
+              onChange={(e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                  toast.success(`${e.target.files.length} file(s) selected`);
+                }
+              }}
+            />
             <UploadCloud className="w-8 h-8 text-slate-400 mb-2" />
             <p className="text-sm font-semibold text-slate-600">Click to select files or drag & drop</p>
             <p className="text-xs text-slate-400 mt-1">PDF, JPG, PNG up to 10MB</p>
-          </div>
+          </label>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setIsUploadOpen(false)} className="w-full">Cancel</Button>
             <Button onClick={() => { toast.success('Documents uploaded successfully!'); setIsUploadOpen(false); }} className="w-full bg-blue-600 hover:bg-blue-700 text-white">Upload Files</Button>
@@ -298,21 +312,21 @@ export default function PriorAuthPage() {
           <div className="space-y-3 py-4">
             <div className="flex justify-between items-center p-3 border border-blue-200 bg-blue-50/50 rounded-xl">
               <div>
-                <p className="font-bold text-slate-800">CVS Pharmacy</p>
-                <p className="text-xs text-slate-500">Main St — 0.4 miles away</p>
+                <p className="font-bold text-slate-800">Apollo Pharmacy</p>
+                <p className="text-xs text-slate-500">MG Road — 0.4 km away</p>
               </div>
               <div className="text-right">
-                <p className="font-bold text-emerald-600">$10.00 Co-pay</p>
+                <p className="font-bold text-emerald-600">₹85 Co-pay</p>
                 <p className="text-xs text-slate-400">Ready in 2 hours</p>
               </div>
             </div>
             <div className="flex justify-between items-center p-3 border border-slate-100 rounded-xl hover:border-blue-100 transition-colors">
               <div>
-                <p className="font-bold text-slate-800">Walgreens Pharmacy</p>
-                <p className="text-xs text-slate-500">Oak Ave — 1.2 miles away</p>
+                <p className="font-bold text-slate-800">MedPlus Pharmacy</p>
+                <p className="text-xs text-slate-500">Koramangala — 1.2 km away</p>
               </div>
               <div className="text-right">
-                <p className="font-bold text-slate-700">$15.00 Co-pay</p>
+                <p className="font-bold text-slate-700">₹120 Co-pay</p>
                 <p className="text-xs text-slate-400">Ready in 3 hours</p>
               </div>
             </div>
