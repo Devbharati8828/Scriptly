@@ -28,10 +28,10 @@ import { useAuth } from '@/context/AuthContext';
 export default function Header() {
   const navigate = useNavigate();
   const [showSearch, setShowSearch] = useState(false);
-  const { currentUser, notifications } = useData();
+  const { currentUser, notifications, markNotificationRead } = useData();
   const { toggleSidebar } = useSidebar();
   const { logout } = useAuth();
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   return (
     <header className="sticky top-0 z-40 w-full">
@@ -85,7 +85,7 @@ export default function Header() {
 
             {/* Notifications */}
             <DropdownMenu>
-              <DropdownMenuTrigger>
+              <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -107,25 +107,35 @@ export default function Header() {
                 <div className="px-3 py-2 border-b">
                   <h3 className="font-semibold text-sm">Notifications</h3>
                 </div>
-                {notifications.slice(0, 4).map((notif) => (
-                  <DropdownMenuItem
-                    key={notif.id}
-                    className={cn(
-                      'flex flex-col items-start gap-1 px-3 py-2.5 cursor-pointer',
-                      !notif.read && 'bg-blue-50/50'
-                    )}
-                    onClick={() => notif.actionUrl && navigate(notif.actionUrl)}
-                  >
-                    <div className="flex items-center gap-2 w-full">
-                      <span className="text-sm font-medium">{notif.title}</span>
-                      {!notif.read && (
-                        <span className="ml-auto h-2 w-2 rounded-full bg-blue-500" />
+                {notifications.length === 0 ? (
+                  <div className="px-3 py-4 text-center text-sm text-slate-500">
+                    No new notifications
+                  </div>
+                ) : (
+                  notifications.slice(0, 4).map((notif) => (
+                    <DropdownMenuItem
+                      key={notif.id}
+                      className={cn(
+                        'flex flex-col items-start gap-1 px-3 py-2.5 cursor-pointer',
+                        !notif.isRead && 'bg-blue-50/50'
                       )}
-                    </div>
-                    <span className="text-xs text-muted-foreground">{notif.message}</span>
-                    <span className="text-[10px] text-muted-foreground/70">{notif.timestamp}</span>
-                  </DropdownMenuItem>
-                ))}
+                      onClick={() => {
+                        if (!notif.isRead) markNotificationRead(notif.id);
+                      }}
+                    >
+                      <div className="flex items-center gap-2 w-full">
+                        <span className="text-sm font-medium">{notif.title}</span>
+                        {!notif.isRead && (
+                          <span className="ml-auto h-2 w-2 rounded-full bg-blue-500" />
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground">{notif.message}</span>
+                      <span className="text-[10px] text-muted-foreground/70">
+                        {new Date(notif.createdAt).toLocaleDateString()}
+                      </span>
+                    </DropdownMenuItem>
+                  ))
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-center text-sm text-blue-600 font-medium justify-center cursor-pointer">
                   View all notifications

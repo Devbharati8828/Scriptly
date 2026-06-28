@@ -18,19 +18,27 @@ import CaregiverAlertsPage from '@/pages/CaregiverAlertsPage';
 import ReportsPage from '@/pages/ReportsPage';
 import CareCirclePage from '@/pages/CareCirclePage';
 import SettingsPage from '@/pages/SettingsPage';
+import OnboardingPage from '@/pages/OnboardingPage';
+import { useData } from '@/context/DataContext';
 
 /** Redirects unauthenticated users to /login */
 function ProtectedRoute({ children }) {
   const { isAuthenticated } = useAuth();
+  const { currentUser, loading } = useData();
+
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+
+  if (!loading && currentUser && !currentUser.onboardingComplete && window.location.pathname !== '/onboarding') {
+    return <Navigate to="/onboarding" replace />;
+  }
+
   return children;
 }
 
 /** Redirects already-authenticated users away from login/signup */
 function GuestRoute({ children }) {
   const { isAuthenticated } = useAuth();
-  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
-  return children;
+  return isAuthenticated ? <Navigate to="/dashboard" replace /> : children;
 }
 
 function AppRoutes() {
@@ -40,6 +48,16 @@ function AppRoutes() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/login"  element={<GuestRoute><LoginPage /></GuestRoute>} />
       <Route path="/signup" element={<GuestRoute><SignupPage /></GuestRoute>} />
+
+      {/* Onboarding */}
+      <Route
+        path="/onboarding"
+        element={
+          <ProtectedRoute>
+            <OnboardingPage />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Protected — wrapped in PageShell layout */}
       <Route

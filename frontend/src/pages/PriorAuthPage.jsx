@@ -1,21 +1,26 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ShieldCheck, ArrowRight, FileText, UploadCloud, PhoneCall, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, ArrowRight, FileText, UploadCloud, PhoneCall, CheckCircle2, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useData } from '@/context/DataContext';
+import { useAuth } from '@/context/AuthContext';
 import { getStatusColor } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 
 export default function PriorAuthPage() {
-  const { priorAuths } = useData();
+  const { priorAuths, refetch } = useData();
+  const { authHeaders } = useAuth();
+  const API_URL = import.meta.env.VITE_API_URL;
   const [isLearnOpen, setIsLearnOpen] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isContactOpen, setIsContactOpen] = useState(false);
   const [isPharmacyOpen, setIsPharmacyOpen] = useState(false);
   const [selectedPa, setSelectedPa] = useState(null);
+  const [uploadFiles, setUploadFiles] = useState([]);
+  const [isUploading, setIsUploading] = useState(false);
 
   const renderAuthsList = (auths) => {
     if (auths.length === 0) {
@@ -119,11 +124,11 @@ export default function PriorAuthPage() {
                 )}
 
                 <div className="space-y-2 mt-auto">
-                  {pa.status === 'under-review' && (
+                  {(pa.status === 'under-review' || pa.status === 'pending') && (
                     <Button 
                       className="w-full bg-white hover:bg-slate-50 text-slate-700 border border-slate-200" 
                       variant="outline"
-                      onClick={() => { setSelectedPa(pa); setIsUploadOpen(true); }}
+                      onClick={() => { setSelectedPa(pa); setUploadFiles([]); setIsUploadOpen(true); }}
                     >
                       <UploadCloud className="w-4 h-4 mr-2" />
                       Upload Documents
@@ -239,12 +244,12 @@ export default function PriorAuthPage() {
       </Tabs>
 
       {/* Upload Dialog */}
-      <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
+      <Dialog open={isUploadOpen} onOpenChange={(open) => { setIsUploadOpen(open); if (!open) setUploadFiles([]); }}>
         <DialogContent className="sm:max-w-[425px] bg-white p-6 rounded-2xl shadow-xl text-slate-800">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-slate-800">Upload Documents for {selectedPa?.medicationName}</DialogTitle>
             <DialogDescription className="text-slate-500">
-              Submit lab results or medical notes to support authorization.
+              Upload your prescription PDF to auto-verify and approve your prior authorization.
             </DialogDescription>
           </DialogHeader>
           <label className="py-6 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center bg-slate-50 hover:bg-slate-100 cursor-pointer transition-colors w-full">
@@ -255,6 +260,7 @@ export default function PriorAuthPage() {
               accept=".pdf,.jpg,.jpeg,.png"
               onChange={(e) => {
                 if (e.target.files && e.target.files.length > 0) {
+                  setUploadFiles(Array.from(e.target.files));
                   toast.success(`${e.target.files.length} file(s) selected`);
                 }
               }}
@@ -263,9 +269,51 @@ export default function PriorAuthPage() {
             <p className="text-sm font-semibold text-slate-600">Click to select files or drag & drop</p>
             <p className="text-xs text-slate-400 mt-1">PDF, JPG, PNG up to 10MB</p>
           </label>
+          {uploadFiles.length > 0 && (
+            <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Selected Files</p>
+              {uploadFiles.map((f, i) => (
+                <p key={i} className="text-sm text-slate-700 truncate">📎 {f.name}</p>
+              ))}
+            </div>
+          )}
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setIsUploadOpen(false)} className="w-full">Cancel</Button>
-            <Button onClick={() => { toast.success('Documents uploaded successfully!'); setIsUploadOpen(false); }} className="w-full bg-blue-600 hover:bg-blue-700 text-white">Upload Files</Button>
+            <Button variant="outline" onClick={() => setIsUploadOpen(false)} className="w-full" disabled={isUploading}>Cancel</Button>
+            <Button
+              disabled={uploadFiles.length === 0 || isUploading}
+              onClick={async () => {
+                if (!selectedPa || uploadFiles.length === 0) return;
+                setIsUploading(true);
+                try {
+                  const formData = new FormData();
+                  formData.append('document', uploadFiles[0]); // Send first file
+                  
+                  const headers = authHeaders();
+                  delete headers['Content-Type']; // Let browser set boundary for multipart/form-data
+
+                  const res = await fetch(`${API_URL}/api/prior-auths/${selectedPa.id}/upload`, {
+                    method: 'POST',
+                    headers,
+                    body: formData,
+                  });
+                  const data = await res.json();
+                  if (!res.ok) throw new Error(data.error || 'Upload failed');
+                  toast.success('Documents uploaded — Prior authorization approved! Your pharmacy order has been placed. 🎉');
+                  setIsUploadOpen(false);
+                  setUploadFiles([]);
+                  refetch();
+                } catch (err) {
+                  toast.error(err.message);
+                } finally {
+                  setIsUploading(false);
+                }
+              }}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {isUploading ? (
+                <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</span>
+              ) : 'Upload & Verify'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

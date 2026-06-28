@@ -42,11 +42,11 @@ async function main() {
     // Insert Users — hash the demo password properly so login works
     const demoHash = await bcrypt.hash('password', 12);
     await pool.query(`
-      INSERT INTO User (id, name, email, passwordHash, role, createdAt, updatedAt)
+      INSERT INTO User (id, name, email, passwordHash, role, insuranceProvider, planName, memberId, phone, onboardingComplete, createdAt, updatedAt)
       VALUES 
-        (?, 'John', 'john@gmail.com', ?, 'PATIENT', NOW(), NOW()),
-        (?, 'Anna', 'anna@example.com', ?, 'CAREGIVER', NOW(), NOW()),
-        (?, 'Dr. Patel', 'dr.patel@clinic.com', ?, 'CAREGIVER', NOW(), NOW())
+        (?, 'John', 'john@gmail.com', ?, 'PATIENT', 'Blue Cross Blue Shield', 'PPO Gold', 'BCBS-88421930', '+1 (555) 019-2834', 1, NOW(), NOW()),
+        (?, 'Anna', 'anna@example.com', ?, 'CAREGIVER', NULL, NULL, NULL, NULL, 1, NOW(), NOW()),
+        (?, 'Dr. Patel', 'dr.patel@clinic.com', ?, 'CAREGIVER', NULL, NULL, NULL, NULL, 1, NOW(), NOW())
     `, [JOHN_ID, demoHash, ANNA_ID, demoHash, DRPATEL_ID, demoHash]);
     console.log('Inserted users (passwords bcrypt-hashed).');
 

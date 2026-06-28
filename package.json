@@ -1,0 +1,22 @@
+{
+  "name": "scripty",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Devbharati8828/scripty.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Devbharati8828/scripty/issues"
+  },
+  "homepage": "https://github.com/Devbharati8828/scripty#readme",
+  "devDependencies": {
+    "@types/node": "^26.0.0"
+  }
+}

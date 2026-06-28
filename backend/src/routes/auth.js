@@ -18,6 +18,11 @@ const publicUser = (user) => ({
   name: user.name,
   email: user.email,
   role: user.role,
+  insuranceProvider: user.insuranceProvider || null,
+  planName: user.planName || null,
+  memberId: user.memberId || null,
+  phone: user.phone || null,
+  onboardingComplete: user.onboardingComplete === 1 || user.onboardingComplete === true || false,
 });
 
 const signToken = (user) => jwt.sign(
@@ -39,8 +44,8 @@ async function findOrCreateDemoUser() {
   const passwordHash = await bcrypt.hash(DEMO_ACCOUNT.password, 12);
 
   await pool.query(
-    'INSERT INTO User (id, name, email, passwordHash, role, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, NOW(), NOW())',
-    [id, DEMO_ACCOUNT.name, email, passwordHash, DEMO_ACCOUNT.role]
+    'INSERT INTO User (id, name, email, passwordHash, role, insuranceProvider, planName, memberId, phone, onboardingComplete, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())',
+    [id, DEMO_ACCOUNT.name, email, passwordHash, DEMO_ACCOUNT.role, 'Blue Cross Blue Shield', 'PPO Gold', 'BCBS-88421930', '+1 (555) 019-2834']
   );
 
   return {
@@ -49,6 +54,11 @@ async function findOrCreateDemoUser() {
     email,
     passwordHash,
     role: DEMO_ACCOUNT.role,
+    insuranceProvider: 'Blue Cross Blue Shield',
+    planName: 'PPO Gold',
+    memberId: 'BCBS-88421930',
+    phone: '+1 (555) 019-2834',
+    onboardingComplete: 1,
   };
 }
 
@@ -84,7 +94,17 @@ router.post('/register', async (req, res) => {
     );
 
     // Return a signed JWT
-    const user = { id, name: name.trim(), email: email.toLowerCase().trim(), role: 'PATIENT' };
+    const user = { 
+      id, 
+      name: name.trim(), 
+      email: email.toLowerCase().trim(), 
+      role: 'PATIENT',
+      insuranceProvider: null,
+      planName: null,
+      memberId: null,
+      phone: null,
+      onboardingComplete: false,
+    };
     const token = signToken(user);
 
     res.status(201).json({

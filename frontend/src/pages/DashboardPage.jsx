@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronDown, Package, Clock } from 'lucide-react';
+import { ChevronDown, Package, Clock, Sunrise, Sun, Moon, CheckCircle2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -23,19 +23,59 @@ const itemVariants = {
 };
 
 export default function DashboardPage() {
-  const { medications, reminders, priorAuths, pharmacyOrders, caregiverUpdates, currentUser, refetch, updateMedicationPills } = useData();
+  const { medications, reminders, priorAuths, pharmacyOrders, caregiverUpdates, currentUser, refetch, updateMedicationPills, logDose } = useData();
   const { authHeaders } = useAuth();
   const navigate = useNavigate();
   const [isTakeDoseOpen, setIsTakeDoseOpen] = useState(false);
   const [isRefillOpen, setIsRefillOpen] = useState(false);
   const [selectedMed, setSelectedMed] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [takenReminderIds, setTakenReminderIds] = useState([]);
   
-  const activeReminders = reminders.filter(r => (r.status === 'due' || r.status === 'upcoming') && !takenReminderIds.includes(r.id));
   const upcomingRefills = medications.filter(m => m.daysLeft <= 14).sort((a, b) => a.daysLeft - b.daysLeft);
   const activeOrder = pharmacyOrders.find(o => o.status !== 'delivered' && o.status !== 'picked-up');
   
+  // Dose Tracker State
+  const [takenDoses, setTakenDoses] = useState({});
+  const [snoozed, setSnoozed] = useState(() => JSON.parse(localStorage.getItem('snoozedDoses') || '{}'));
+
+  const getDosesForMed = (med) => {
+    const f = med.frequency.toLowerCase();
+    if (f.includes('twice') || f.includes('2')) return ['morning', 'evening'];
+    if (f.includes('three') || f.includes('3')) return ['morning', 'afternoon', 'evening'];
+    if (f.includes('evening') || f.includes('night') || f.includes('bed')) return ['evening'];
+    return ['morning'];
+  };
+
+  const allExpectedDoses = medications.flatMap(m => getDosesForMed(m).map(time => ({ ...m, time })));
+  const totalDosesCount = allExpectedDoses.length;
+  const takenCount = Object.keys(takenDoses).length;
+
+  const handleTakeNewDose = async (med, time) => {
+    try {
+      await logDose(med.id, 1);
+      setTakenDoses(prev => ({ ...prev, [`${med.id}_${time}`]: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }));
+      toast.success(`Logged ${med.brandName}`);
+    } catch (err) {
+      toast.error('Failed to log dose');
+    }
+  };
+
+  const handleSnooze = (med, time) => {
+    const newSnoozed = { ...snoozed, [`${med.id}_${time}`]: Date.now() + 30 * 60000 };
+    setSnoozed(newSnoozed);
+    localStorage.setItem('snoozedDoses', JSON.stringify(newSnoozed));
+    toast.success('Snoozed for 30 minutes');
+  };
+
+  const handleMarkAllTaken = async () => {
+    for (const dose of allExpectedDoses) {
+      const key = `${dose.id}_${dose.time}`;
+      if (!takenDoses[key] && (!snoozed[key] || snoozed[key] < Date.now())) {
+        await handleTakeNewDose(dose, dose.time);
+      }
+    }
+  };
+
   const API_URL = import.meta.env.VITE_API_URL;
 
   const handleTakeDose = async () => {
@@ -120,47 +160,118 @@ export default function DashboardPage() {
           
           {/* Left Column */}
           <div className="lg:col-span-7 space-y-6">
-            {/* Today's Reminders */}
+            {/* Dose Tracker */}
             <motion.div variants={itemVariants} className="glass-card rounded-2xl p-6 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-10 -mt-10" />
-              <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                <Clock className="w-5 h-5 text-blue-500" />
-                Today's Reminders
-              </h2>
-              {activeReminders.length > 0 ? (
-                <div className="bg-white/60 rounded-xl p-5 border border-white flex flex-col md:flex-row items-center justify-between gap-6 relative z-10">
-                  <div className="flex items-center gap-5 w-full">
-                    <div className="w-14 h-14 rounded-full bg-blue-100 flex items-center justify-center text-2xl animate-bounce">
-                      {activeReminders[0].icon}
+              
+              <div className="flex items-center justify-between mb-6 relative z-10">
+                <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-blue-500" />
+                  Today's Dose Tracker
+                </h2>
+                {totalDosesCount > 0 && takenCount < totalDosesCount && (
+                  <Button variant="outline" size="sm" onClick={handleMarkAllTaken} className="text-blue-600 hover:text-blue-700 bg-white">
+                    Mark All as Taken
+                  </Button>
+                )}
+              </div>
+
+              {totalDosesCount > 0 ? (
+                <div className="space-y-6 relative z-10">
+                  {/* Progress Bar */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm font-medium">
+                      <span className="text-slate-600">Daily Progress</span>
+                      <span className="text-blue-600">{takenCount} / {totalDosesCount} Doses Taken</span>
                     </div>
-                    <div>
-                      <h3 className="font-bold text-lg text-slate-800">Time to Take Your Pills</h3>
-                      <p className="text-slate-500 font-medium">{activeReminders[0].medicationName} • Take {activeReminders[0].pillCount} Pill(s)</p>
+                    <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                      <motion.div 
+                        className="h-full bg-blue-500 rounded-full"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${(takenCount / totalDosesCount) * 100}%` }}
+                        transition={{ duration: 0.5 }}
+                      />
                     </div>
                   </div>
-                  <div className="flex flex-col gap-2 w-full md:w-auto shrink-0">
-                    <Button 
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-base h-11 px-8 shadow-lg shadow-blue-200"
-                      onClick={() => {
-                        setSelectedMed(medications.find(m => m.brandName === activeReminders[0].medicationName) || activeReminders[0]);
-                        setIsTakeDoseOpen(true);
-                      }}
-                    >TAKE DOSE</Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger>
-                        <Button variant="ghost" size="sm" className="w-full text-slate-500 hover:text-slate-700 h-8">
-                          Snooze <ChevronDown className="w-3 h-3 ml-1" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="center">
-                        <DropdownMenuItem onClick={() => toast.success('Snoozed for 15 Minutes')}>15 Minutes</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => toast.success('Snoozed for 1 Hour')}>1 Hour</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
+
+                  {takenCount === totalDosesCount ? (
+                    <motion.div 
+                      initial={{ scale: 0.9, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      className="bg-emerald-50 rounded-xl p-6 text-center border border-emerald-100"
+                    >
+                      <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-2" />
+                      <h3 className="text-lg font-bold text-emerald-700">All doses taken today 🎉</h3>
+                      <p className="text-emerald-600 text-sm mt-1">Great job staying on track!</p>
+                    </motion.div>
+                  ) : (
+                    <div className="space-y-4">
+                      {['morning', 'afternoon', 'evening'].map(time => {
+                        const timeDoses = allExpectedDoses.filter(d => d.time === time);
+                        if (timeDoses.length === 0) return null;
+
+                        const Icon = time === 'morning' ? Sunrise : time === 'afternoon' ? Sun : Moon;
+                        const colors = time === 'morning' ? 'text-amber-500 bg-amber-50 border-amber-100' : 
+                                      time === 'afternoon' ? 'text-orange-500 bg-orange-50 border-orange-100' : 
+                                      'text-indigo-500 bg-indigo-50 border-indigo-100';
+
+                        return (
+                          <div key={time} className="space-y-3">
+                            <h3 className={`flex items-center gap-2 font-semibold text-sm uppercase tracking-wider ${colors.split(' ')[0]}`}>
+                              <Icon className="w-4 h-4" /> {time}
+                            </h3>
+                            {timeDoses.map(dose => {
+                              const key = `${dose.id}_${time}`;
+                              const isTaken = takenDoses[key];
+                              const isSnoozed = snoozed[key] && snoozed[key] > Date.now();
+
+                              return (
+                                <div key={key} className={`flex flex-col md:flex-row items-center justify-between gap-4 p-4 rounded-xl border transition-all ${isTaken ? 'bg-slate-50 border-slate-100 opacity-75' : `bg-white ${colors.split(' ')[2]}`}`}>
+                                  <div>
+                                    <h4 className="font-bold text-slate-800">{dose.brandName}</h4>
+                                    <p className="text-sm text-slate-500">Take 1 Pill • {dose.dosage}</p>
+                                  </div>
+                                  <div className="shrink-0 w-full md:w-auto flex gap-2">
+                                    {isTaken ? (
+                                      <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 px-4 py-2 rounded-lg font-medium text-sm w-full md:w-auto justify-center">
+                                        <CheckCircle2 className="w-4 h-4" />
+                                        Taken at {takenDoses[key]}
+                                      </div>
+                                    ) : isSnoozed ? (
+                                      <div className="flex items-center gap-2 text-slate-500 bg-slate-100 px-4 py-2 rounded-lg font-medium text-sm w-full md:w-auto justify-center">
+                                        <Clock className="w-4 h-4" />
+                                        Snoozed
+                                      </div>
+                                    ) : (
+                                      <>
+                                        <Button 
+                                          className="flex-1 md:flex-none bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-200"
+                                          onClick={() => handleTakeNewDose(dose, time)}
+                                        >
+                                          TAKE DOSE
+                                        </Button>
+                                        <Button 
+                                          variant="outline" 
+                                          className="flex-none px-3"
+                                          onClick={() => handleSnooze(dose, time)}
+                                          title="Snooze for 30m"
+                                        >
+                                          <Clock className="w-4 h-4" />
+                                        </Button>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               ) : (
-                <p className="text-slate-500 text-center py-4">All caught up for now!</p>
+                <p className="text-slate-500 text-center py-4">No medications scheduled for today.</p>
               )}
             </motion.div>
 

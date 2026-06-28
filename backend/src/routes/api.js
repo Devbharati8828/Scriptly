@@ -1,7 +1,11 @@
 import { Router } from 'express';
 import crypto from 'crypto';
+import PDFDocument from 'pdfkit';
+import multer from 'multer';
 import { pool } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
+
+const upload = multer({ dest: 'uploads/' });
 
 const router = Router();
 
@@ -13,7 +17,7 @@ router.get('/dashboard', async (req, res) => {
   try {
     const userId = req.user.userId;
 
-    const [users]      = await pool.query('SELECT id, name, email, role, createdAt, updatedAt FROM User WHERE id = ?', [userId]);
+    const [users]      = await pool.query('SELECT id, name, email, role, insuranceProvider, planName, memberId, phone, onboardingComplete, createdAt, updatedAt FROM User WHERE id = ?', [userId]);
     const user         = users[0];
     if (!user) return res.status(404).json({ error: 'User not found.' });
 
@@ -50,7 +54,9 @@ router.get('/dashboard', async (req, res) => {
       },
     }));
 
-    res.json({ user, medications, orders, priorAuths, alerts: formattedAlerts });
+    const [doseLogs] = await pool.query('SELECT * FROM DoseLog WHERE userId = ?', [userId]);
+
+    res.json({ user, medications, orders, priorAuths, alerts: formattedAlerts, doseLogs });
   } catch (error) {
     console.error('[GET /api/dashboard]', error);
     res.status(500).json({ error: 'Failed to fetch dashboard data.' });
@@ -61,6 +67,28 @@ router.get('/dashboard', async (req, res) => {
 router.get('/medications', async (req, res) => {
   try {
     const [medications] = await pool.query('SELECT * FROM Medication WHERE userId = ?', [req.user.userId]);
+
+    // Notification Trigger: Medication pillCount drops below 20%
+    for (const med of medications) {
+      if (med.pillCount < 0.2 * med.totalPills) {
+        // Check for existing refill reminder in the last 24 hours
+        const [recentNotifs] = await pool.query(`
+          SELECT id FROM Notification 
+          WHERE userId = ? AND type = 'REFILL_REMINDER' 
+          AND message LIKE ? 
+          AND createdAt > NOW() - INTERVAL 1 DAY
+        `, [req.user.userId, `%${med.brandName}%`]);
+
+        if (recentNotifs.length === 0) {
+          const notifId = crypto.randomUUID();
+          await pool.query(`
+            INSERT INTO Notification (id, userId, type, title, message)
+            VALUES (?, ?, ?, ?, ?)
+          `, [notifId, req.user.userId, 'REFILL_REMINDER', 'Refill Reminder', `Your supply of ${med.brandName} is running low (${med.pillCount} remaining). Please request a refill.`]);
+        }
+      }
+    }
+
     res.json(medications);
   } catch (error) {
     console.error('[GET /api/medications]', error);
@@ -227,6 +255,236 @@ router.get('/prior-auths', async (req, res) => {
   }
 });
 
+// ─── POST /api/orders ────────────────────────────────────────────────────────
+router.post('/orders', async (req, res) => {
+  try {
+    const { medicationId, pharmacyId, deliveryType, cost } = req.body;
+    const userId = req.user.userId;
+
+    // ── Input validation ──────────────────────────────────────────────────────
+    if (!medicationId || typeof medicationId !== 'string') {
+      return res.status(400).json({ error: 'medicationId is required.' });
+    }
+    if (!pharmacyId || typeof pharmacyId !== 'string') {
+      return res.status(400).json({ error: 'pharmacyId is required.' });
+    }
+
+    // Verify the medication belongs to the authenticated user
+    const [meds] = await pool.query(
+      'SELECT id FROM Medication WHERE id = ? AND userId = ?',
+      [medicationId, userId]
+    );
+    if (meds.length === 0) {
+      return res.status(404).json({ error: 'Medication not found.' });
+    }
+
+    const id = crypto.randomUUID();
+    const expectedDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const orderDeliveryType = deliveryType || 'DELIVERY';
+    const orderCost = cost !== undefined ? Number(cost) : 0.0;
+
+    await pool.query(`
+      INSERT INTO PharmacyOrder (id, userId, medicationId, pharmacyId, status, deliveryType, expectedDate, cost, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, 'PLACED', ?, ?, ?, NOW(), NOW())
+    `, [id, userId, medicationId, pharmacyId.trim(), orderDeliveryType, expectedDate, orderCost]);
+
+    const [newOrder] = await pool.query('SELECT * FROM PharmacyOrder WHERE id = ?', [id]);
+    res.status(201).json(newOrder[0]);
+  } catch (error) {
+    console.error('[POST /api/orders]', error);
+    res.status(500).json({ error: 'Failed to create pharmacy order.' });
+  }
+});
+
+// ─── POST /api/prior-auths ──────────────────────────────────────────────────
+router.post('/prior-auths', async (req, res) => {
+  try {
+    const { medicationId, insurer } = req.body;
+    const userId = req.user.userId;
+    const userName = req.user.name || 'Patient';
+
+    // ── Input validation ──────────────────────────────────────────────────────
+    if (!medicationId || typeof medicationId !== 'string') {
+      return res.status(400).json({ error: 'medicationId is required.' });
+    }
+
+    // Verify the medication belongs to the authenticated user
+    const [meds] = await pool.query(
+      'SELECT * FROM Medication WHERE id = ? AND userId = ?',
+      [medicationId, userId]
+    );
+    if (meds.length === 0) {
+      return res.status(404).json({ error: 'Medication not found.' });
+    }
+    const med = meds[0];
+
+    // Generate reference ID: PA-YYYY-XXXX
+    const year = new Date().getFullYear();
+    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    const referenceId = `PA-${year}-${randomNum}`;
+
+    const id = crypto.randomUUID();
+    const insurerName = insurer || 'Blue Cross Blue Shield';
+    const expectedDecisionDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+
+    await pool.query(`
+      INSERT INTO PriorAuth (id, userId, medicationId, status, insurer, referenceId, expectedDecisionDate, createdAt, updatedAt)
+      VALUES (?, ?, ?, 'PENDING', ?, ?, ?, NOW(), NOW())
+    `, [id, userId, medicationId, insurerName, referenceId, expectedDecisionDate]);
+
+    // ── Generate Prescription PDF ─────────────────────────────────────────────
+    const pdfBase64 = await new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ size: 'A4', margin: 50 });
+      const chunks = [];
+
+      doc.on('data', (chunk) => chunks.push(chunk));
+      doc.on('end', () => {
+        const pdfBuffer = Buffer.concat(chunks);
+        resolve(pdfBuffer.toString('base64'));
+      });
+      doc.on('error', reject);
+
+      // Header
+      doc.fontSize(22).font('Helvetica-Bold').text('PRESCRIPTION', { align: 'center' });
+      doc.moveDown(0.3);
+      doc.fontSize(10).font('Helvetica').fillColor('#666666')
+        .text('Prior Authorization Document', { align: 'center' });
+      doc.moveDown(1);
+
+      // Separator
+      doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor('#cccccc').stroke();
+      doc.moveDown(1);
+
+      // Reference ID & Date
+      doc.fontSize(11).font('Helvetica-Bold').fillColor('#000000')
+        .text(`Reference ID: ${referenceId}`, { continued: false });
+      doc.font('Helvetica').text(`Date: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`);
+      doc.moveDown(1);
+
+      // Patient Information
+      doc.fontSize(13).font('Helvetica-Bold').text('Patient Information');
+      doc.moveDown(0.3);
+      doc.fontSize(11).font('Helvetica')
+        .text(`Name: ${userName}`);
+      doc.moveDown(1);
+
+      // Medication Details
+      doc.fontSize(13).font('Helvetica-Bold').text('Medication Details');
+      doc.moveDown(0.3);
+      doc.fontSize(11).font('Helvetica')
+        .text(`Brand Name: ${med.brandName}`)
+        .text(`Generic Name: ${med.genericName || 'N/A'}`)
+        .text(`Dosage: ${med.dosage}`)
+        .text(`Frequency: ${med.frequency}`)
+        .text(`Pharmacy: ${med.pharmacyId || 'N/A'}`);
+      doc.moveDown(1);
+
+      // Insurance Info
+      doc.fontSize(13).font('Helvetica-Bold').text('Insurance Information');
+      doc.moveDown(0.3);
+      doc.fontSize(11).font('Helvetica')
+        .text(`Insurer: ${insurerName}`)
+        .text(`Authorization Status: PENDING`);
+      doc.moveDown(2);
+
+      // Separator
+      doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor('#cccccc').stroke();
+      doc.moveDown(1.5);
+
+      // Doctor Signature
+      doc.fontSize(11).font('Helvetica')
+        .text('Prescribing Physician Signature:');
+      doc.moveDown(1.5);
+      doc.moveTo(50, doc.y).lineTo(300, doc.y).strokeColor('#000000').lineWidth(1).stroke();
+      doc.moveDown(0.3);
+      doc.fontSize(9).font('Helvetica').fillColor('#666666')
+        .text('Dr. _______________________, MD');
+      doc.moveDown(0.5);
+      doc.text(`Date: _______________`);
+
+      // Footer
+      doc.moveDown(3);
+      doc.fontSize(8).fillColor('#999999')
+        .text(`Document generated by Scriptly — Reference: ${referenceId}`, { align: 'center' });
+
+      doc.end();
+    });
+
+    const [newAuth] = await pool.query('SELECT * FROM PriorAuth WHERE id = ?', [id]);
+    res.status(201).json({
+      priorAuth: newAuth[0],
+      pdf: pdfBase64,
+      referenceId,
+    });
+  } catch (error) {
+    console.error('[POST /api/prior-auths]', error);
+    res.status(500).json({ error: 'Failed to create prior authorization.' });
+  }
+});
+
+// ─── POST /api/prior-auths/:id/upload ────────────────────────────────────────
+router.post('/prior-auths/:id/upload', upload.single('document'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.userId;
+
+    if (!id || typeof id !== 'string') {
+      return res.status(400).json({ error: 'Invalid prior auth ID.' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No document uploaded.' });
+    }
+
+    // Verify the prior auth belongs to the authenticated user
+    const [auths] = await pool.query(
+      'SELECT * FROM PriorAuth WHERE id = ? AND userId = ?',
+      [id, userId]
+    );
+    if (auths.length === 0) {
+      return res.status(404).json({ error: 'Prior authorization not found.' });
+    }
+
+    const auth = auths[0];
+
+    const today = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    await pool.query(
+      'UPDATE PriorAuth SET status = ?, expectedDecisionDate = ?, notes = ?, updatedAt = NOW() WHERE id = ?',
+      ['APPROVED', today, 'Documents verified — prior authorization approved', id]
+    );
+
+    // Trigger Notification for Prior Auth Approval
+    const notifId = crypto.randomUUID();
+    await pool.query(`
+      INSERT INTO Notification (id, userId, type, title, message)
+      VALUES (?, ?, ?, ?, ?)
+    `, [notifId, userId, 'PRIOR_AUTH_DECISION', 'Prior Authorization Approved', `Your prior authorization for ${auth.medicationId} has been approved.`]);
+
+    // Auto-create a pharmacy order for the associated medication
+    const [meds] = await pool.query('SELECT * FROM Medication WHERE id = ?', [auth.medicationId]);
+    const med = meds[0];
+    const orderId = crypto.randomUUID();
+    const expectedDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    await pool.query(`
+      INSERT INTO PharmacyOrder (id, userId, medicationId, pharmacyId, status, deliveryType, expectedDate, cost, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, 'PROCESSING', 'DELIVERY', ?, 0.0, NOW(), NOW())
+    `, [orderId, userId, auth.medicationId, med?.pharmacyId || 'Default Pharmacy', expectedDate]);
+
+    const [updatedAuth] = await pool.query('SELECT * FROM PriorAuth WHERE id = ?', [id]);
+    const [newOrder] = await pool.query('SELECT * FROM PharmacyOrder WHERE id = ?', [orderId]);
+
+    res.json({
+      priorAuth: updatedAuth[0],
+      order: newOrder[0],
+      message: 'Prior authorization approved and pharmacy order created.',
+    });
+  } catch (error) {
+    console.error('[POST /api/prior-auths/:id/upload]', error);
+    res.status(500).json({ error: 'Failed to process upload.' });
+  }
+});
+
 // ─── GET /api/alerts ─────────────────────────────────────────────────────────
 router.get('/alerts', async (req, res) => {
   try {
@@ -302,7 +560,13 @@ router.post('/medications/:id/refill', async (req, res) => {
 router.post('/medications/:id/dose-log', async (req, res) => {
   try {
     const { id: medicationId } = req.params;
+    const { pillsTaken = 1 } = req.body;
     const userId = req.user.userId;
+
+    const parsedTaken = Number(pillsTaken);
+    if (isNaN(parsedTaken) || parsedTaken < 1 || !Number.isInteger(parsedTaken)) {
+      return res.status(400).json({ error: 'pillsTaken must be a positive integer.' });
+    }
 
     // Verify ownership and get current pillCount
     const [meds] = await pool.query('SELECT pillCount FROM Medication WHERE id = ? AND userId = ?', [medicationId, userId]);
@@ -311,8 +575,10 @@ router.post('/medications/:id/dose-log', async (req, res) => {
     }
     
     let currentCount = meds[0].pillCount;
-    if (currentCount > 0) {
-      currentCount--;
+    if (currentCount >= parsedTaken) {
+      currentCount -= parsedTaken;
+    } else {
+      currentCount = 0; // Don't go below zero
     }
 
     let status = 'ACTIVE';
@@ -321,11 +587,11 @@ router.post('/medications/:id/dose-log', async (req, res) => {
 
     const logId = crypto.randomUUID();
     
-    // Insert dose log and update pill count in a transaction-like manner (using async/await sequentially)
+    // Insert dose log and update pill count
     await pool.query(`
-      INSERT INTO DoseLog (id, userId, medicationId, takenAt)
-      VALUES (?, ?, ?, NOW())
-    `, [logId, userId, medicationId]);
+      INSERT INTO DoseLog (id, userId, medicationId, takenAt, pillsTaken)
+      VALUES (?, ?, ?, NOW(), ?)
+    `, [logId, userId, medicationId, parsedTaken]);
 
     await pool.query(
       'UPDATE Medication SET pillCount = ?, status = ?, updatedAt = NOW() WHERE id = ?',
@@ -336,6 +602,110 @@ router.post('/medications/:id/dose-log', async (req, res) => {
   } catch (error) {
     console.error('[POST /api/medications/:id/dose-log]', error);
     res.status(500).json({ error: 'Failed to log dose.' });
+  }
+});
+
+// ─── GET /api/notifications ──────────────────────────────────────────────────
+router.get('/notifications', async (req, res) => {
+  try {
+    const [notifications] = await pool.query('SELECT * FROM Notification WHERE userId = ? ORDER BY createdAt DESC', [req.user.userId]);
+    res.json(notifications);
+  } catch (error) {
+    console.error('[GET /api/notifications]', error);
+    res.status(500).json({ error: 'Failed to fetch notifications.' });
+  }
+});
+
+// ─── PATCH /api/notifications/:id/read ───────────────────────────────────────
+router.patch('/notifications/:id/read', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query('UPDATE Notification SET isRead = TRUE WHERE id = ? AND userId = ?', [id, req.user.userId]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[PATCH /api/notifications/:id/read]', error);
+    res.status(500).json({ error: 'Failed to mark notification read.' });
+  }
+});
+
+// ─── PATCH /api/orders/:id ───────────────────────────────────────────────────
+router.patch('/orders/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    const userId = req.user.userId;
+
+    if (!status || typeof status !== 'string') {
+      return res.status(400).json({ error: 'status is required.' });
+    }
+
+    const [orders] = await pool.query('SELECT * FROM PharmacyOrder WHERE id = ? AND userId = ?', [id, userId]);
+    if (orders.length === 0) return res.status(404).json({ error: 'Order not found.' });
+
+    await pool.query('UPDATE PharmacyOrder SET status = ?, updatedAt = NOW() WHERE id = ?', [status, id]);
+
+    if (status === 'DELIVERED') {
+      const notifId = crypto.randomUUID();
+      await pool.query(`
+        INSERT INTO Notification (id, userId, type, title, message)
+        VALUES (?, ?, ?, ?, ?)
+      `, [notifId, userId, 'ORDER_DELIVERED', 'Order Delivered', 'Your pharmacy order has been delivered.']);
+    }
+
+    res.json({ success: true, message: 'Order updated successfully.' });
+  } catch (error) {
+    console.error('[PATCH /api/orders/:id]', error);
+    res.status(500).json({ error: 'Failed to update order.' });
+  }
+});
+
+// ─── PATCH /api/user/profile ────────────────────────────────────────────────
+router.patch('/user/profile', async (req, res) => {
+  try {
+    const { name, phone } = req.body;
+    const userId = req.user.userId;
+    if (!name || name.trim() === '') {
+      return res.status(400).json({ error: 'Name is required' });
+    }
+    await pool.query(
+      'UPDATE User SET name = ?, phone = ?, updatedAt = NOW() WHERE id = ?',
+      [name.trim(), phone || null, userId]
+    );
+    res.json({ success: true, message: 'Profile updated successfully.' });
+  } catch (error) {
+    console.error('[PATCH /api/user/profile]', error);
+    res.status(500).json({ error: 'Failed to update profile.' });
+  }
+});
+
+// ─── PATCH /api/user/insurance ──────────────────────────────────────────────
+router.patch('/user/insurance', async (req, res) => {
+  try {
+    const { insuranceProvider, planName, memberId } = req.body;
+    const userId = req.user.userId;
+    await pool.query(
+      'UPDATE User SET insuranceProvider = ?, planName = ?, memberId = ?, updatedAt = NOW() WHERE id = ?',
+      [insuranceProvider || null, planName || null, memberId || null, userId]
+    );
+    res.json({ success: true, message: 'Insurance details updated successfully.' });
+  } catch (error) {
+    console.error('[PATCH /api/user/insurance]', error);
+    res.status(500).json({ error: 'Failed to update insurance details.' });
+  }
+});
+
+// ─── PATCH /api/user/onboarding-complete ────────────────────────────────────
+router.patch('/user/onboarding-complete', async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    await pool.query(
+      'UPDATE User SET onboardingComplete = TRUE, updatedAt = NOW() WHERE id = ?',
+      [userId]
+    );
+    res.json({ success: true, message: 'Onboarding completed.' });
+  } catch (error) {
+    console.error('[PATCH /api/user/onboarding-complete]', error);
+    res.status(500).json({ error: 'Failed to complete onboarding.' });
   }
 });
 

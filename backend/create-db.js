@@ -20,6 +20,11 @@ async function createDatabase() {
         email VARCHAR(255) UNIQUE NOT NULL,
         passwordHash VARCHAR(255) NOT NULL,
         role VARCHAR(50) DEFAULT 'PATIENT',
+        insuranceProvider VARCHAR(255),
+        planName VARCHAR(255),
+        memberId VARCHAR(255),
+        phone VARCHAR(50),
+        onboardingComplete BOOLEAN DEFAULT FALSE,
         createdAt DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
         updatedAt DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
       );
@@ -125,6 +130,35 @@ async function createDatabase() {
     }
     console.log('Foreign key constraints verified.');
 
+    // ── ALTER TABLE: add new columns for order/prior-auth flow ─────────────────
+    const columnAlterStatements = [
+      // PriorAuth.referenceId — stores PA-YYYY-XXXX reference IDs for PDF matching
+      `ALTER TABLE PriorAuth ADD COLUMN referenceId VARCHAR(20)`,
+      // PharmacyOrder.medicationId — links orders to a specific medication
+      `ALTER TABLE PharmacyOrder ADD COLUMN medicationId VARCHAR(36)`,
+      // PriorAuth.notes — stores notes for approval
+      `ALTER TABLE PriorAuth ADD COLUMN notes TEXT`,
+      // DoseLog.pillsTaken — stores the number of pills taken
+      `ALTER TABLE DoseLog ADD COLUMN pillsTaken INT DEFAULT 1`,
+      // User onboarding/profile columns
+      `ALTER TABLE User ADD COLUMN insuranceProvider VARCHAR(255)`,
+      `ALTER TABLE User ADD COLUMN planName VARCHAR(255)`,
+      `ALTER TABLE User ADD COLUMN memberId VARCHAR(255)`,
+      `ALTER TABLE User ADD COLUMN phone VARCHAR(50)`,
+      `ALTER TABLE User ADD COLUMN onboardingComplete BOOLEAN DEFAULT FALSE`,
+    ];
+
+    for (const stmt of columnAlterStatements) {
+      try {
+        await connection.query(stmt);
+        console.log('Applied column alteration.');
+      } catch (e) {
+        // ER_DUP_FIELDNAME (1060): column already exists — safe to ignore
+        if (e.errno !== 1060) throw e;
+      }
+    }
+    console.log('Column alterations verified.');
+
     // Create CaregiverAlert Table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS CaregiverAlert (
@@ -160,11 +194,27 @@ async function createDatabase() {
         userId VARCHAR(36) NOT NULL,
         medicationId VARCHAR(36) NOT NULL,
         takenAt DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
+        pillsTaken INT DEFAULT 1,
         FOREIGN KEY (userId) REFERENCES User(id) ON DELETE CASCADE,
         FOREIGN KEY (medicationId) REFERENCES Medication(id) ON DELETE CASCADE
       );
     `);
     console.log('Table "DoseLog" verified.');
+
+    // Create Notification Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS Notification (
+        id VARCHAR(36) PRIMARY KEY,
+        userId VARCHAR(36) NOT NULL,
+        type VARCHAR(50) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        isRead BOOLEAN DEFAULT FALSE,
+        createdAt DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
+        FOREIGN KEY (userId) REFERENCES User(id) ON DELETE CASCADE
+      );
+    `);
+    console.log('Table "Notification" verified.');
 
     console.log('Database initialization completed successfully.');
     await connection.end();
